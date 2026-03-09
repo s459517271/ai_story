@@ -76,7 +76,7 @@ case $REPLY in
 
         # 启动Celery Worker (后台)
         echo "启动 Celery Worker..."
-        uv run celery -A config worker -Q llm,image,video -l info --detach
+        uv run celery -A config worker -l info -P gevent
         echo -e "${GREEN}✓ Celery Worker 已启动 (后台运行)${NC}"
         echo ""
 

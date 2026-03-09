@@ -496,8 +496,11 @@ class Text2ImageStageProcessor(StageProcessor):
 
             # 解析响应
             # 假设响应格式: {"data": [{"url": "...", "width": 1920, "height": 1080}]}
-            if getattr(response, 'data'):
-                response = {"data": getattr(response, 'data')}
+            try:
+                if getattr(response, 'data'):
+                    response = {"data": getattr(response, 'data')}
+            except Exception:
+                pass
             if 'data' not in response or not response['data']:
                 logger.error(f"分镜 {storyboard.get('sequence_number')} 响应格式错误: {response}")
                 return None

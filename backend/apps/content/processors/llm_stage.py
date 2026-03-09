@@ -263,7 +263,7 @@ class LLMStageProcessor(StageProcessor):
 
         elif self.stage_type == 'storyboard':
             # 分镜生成: 单个任务
-            return [{"user_prompt": input_data.get("raw_text", "")}]
+            return [{"user_prompt": input_data.get("original_topic", "")}]
 
         elif self.stage_type == 'camera_movement':
             # 运镜生成: 为每个分镜生成运镜

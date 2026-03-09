@@ -30,7 +30,7 @@
     </div>
 
     <!-- 运镜类型 -->
-    <div class="node-content">
+    <!-- <div class="node-content">
       <label class="content-label">运镜类型</label>
       <input
         v-model="localMovementType"
@@ -52,8 +52,7 @@
         <option value="dolly_in">前推</option>
         <option value="dolly_out">后拉</option>
       </datalist>
-    </div>
-
+    </div> -->
     <!-- 运镜参数 -->
     <div v-if="status === 'completed' && movementParams" class="node-description">
       <label class="content-label">运镜参数</label>
@@ -62,7 +61,7 @@
         class="description-textarea"
         :disabled="status === 'processing'"
         placeholder="输入运镜参数描述"
-        rows="3"
+        rows="10"
         @blur="handleDescriptionChange"
       ></textarea>
     </div>
@@ -106,10 +105,10 @@ export default {
   data() {
     return {
       localMovementType: this.movementType,
-      localDescription: this.movementParams?.description || '',
+      localDescription: this.movementParams?.description || this.movementParams?.raw_text || '',
       isGenerating: false,
       lastSavedMovementType: this.movementType,
-      lastSavedDescription: this.movementParams?.description || ''
+      lastSavedDescription: this.movementParams?.description || this.movementParams?.raw_text || ''
     };
   },
   computed: {
