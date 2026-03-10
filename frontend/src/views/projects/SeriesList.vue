@@ -49,7 +49,14 @@
           <div class="card-footer">
             <span class="meta-time">更新于 {{ formatDate(series.updated_at) }}</span>
             <div class="card-actions">
-              <button class="ghost-action" @click.stop="handleView(series.id)">查看详情</button>
+              <button class="ghost-action" @click.stop="openEditModal(series)">编辑</button>
+              <button
+                class="ghost-action danger-action"
+                :disabled="deletingSeriesId === series.id"
+                @click.stop="handleDelete(series)"
+              >
+                {{ deletingSeriesId === series.id ? '删除中...' : '删除' }}
+              </button>
             </div>
           </div>
         </article>
@@ -58,7 +65,7 @@
 
     <dialog ref="createModal" class="modal">
       <div class="modal-box form-modal-box">
-        <h3 class="font-bold text-lg">创建作品</h3>
+        <h3 class="font-bold text-lg">{{ isEditing ? '编辑作品' : '创建作品' }}</h3>
         <p class="form-hint">作品作为顶层容器，下面可以继续创建多个分集。</p>
         <div class="form-control mt-4">
           <label class="label">
@@ -84,7 +91,9 @@
         </div>
         <div class="modal-action">
           <button class="btn" @click="closeCreateModal">取消</button>
-          <button class="btn btn-primary" @click="submitCreate">创建</button>
+          <button class="btn btn-primary" :disabled="submitting" @click="submitForm">
+            {{ submitting ? (isEditing ? '保存中...' : '创建中...') : (isEditing ? '保存' : '创建') }}
+          </button>
         </div>
       </div>
       <form method="dialog" class="modal-backdrop">
@@ -105,6 +114,9 @@ export default {
   data() {
     return {
       loading: false,
+      submitting: false,
+      deletingSeriesId: null,
+      editingSeriesId: null,
       form: {
         name: '',
         description: '',
@@ -113,12 +125,15 @@ export default {
   },
   computed: {
     ...mapState('projects', ['seriesList']),
+    isEditing() {
+      return Boolean(this.editingSeriesId);
+    },
   },
   created() {
     this.fetchData();
   },
   methods: {
-    ...mapActions('projects', ['fetchSeries', 'createSeries']),
+    ...mapActions('projects', ['fetchSeries', 'createSeries', 'updateSeries', 'deleteSeries']),
     formatDate,
     async fetchData() {
       this.loading = true;
@@ -132,23 +147,76 @@ export default {
       this.$router.push({ name: 'SeriesDetail', params: { id } });
     },
     openCreateModal() {
+      this.editingSeriesId = null;
+      this.form = { name: '', description: '' };
+      this.$refs.createModal.showModal();
+    },
+    openEditModal(series) {
+      this.editingSeriesId = series.id;
+      this.form = {
+        name: series.name || '',
+        description: series.description || '',
+      };
       this.$refs.createModal.showModal();
     },
     closeCreateModal() {
       this.$refs.createModal.close();
+      this.editingSeriesId = null;
+      this.submitting = false;
       this.form = { name: '', description: '' };
     },
-    async submitCreate() {
+    async submitForm() {
       if (!this.form.name.trim()) {
         alert('请输入作品名称');
         return;
       }
-      const series = await this.createSeries({
-        name: this.form.name.trim(),
-        description: this.form.description.trim(),
-      });
-      this.closeCreateModal();
-      this.$router.push({ name: 'SeriesDetail', params: { id: series.id } });
+
+      this.submitting = true;
+      try {
+        if (this.isEditing) {
+          await this.updateSeries({
+            id: this.editingSeriesId,
+            data: {
+              name: this.form.name.trim(),
+              description: this.form.description.trim(),
+            },
+          });
+          this.$message.success('作品已更新');
+        } else {
+          const series = await this.createSeries({
+            name: this.form.name.trim(),
+            description: this.form.description.trim(),
+          });
+          this.$message.success('作品已创建');
+          this.closeCreateModal();
+          this.$router.push({ name: 'SeriesDetail', params: { id: series.id } });
+          return;
+        }
+
+        this.closeCreateModal();
+      } catch (error) {
+        console.error('Failed to submit series:', error);
+        this.$message.error(this.isEditing ? '更新作品失败' : '创建作品失败');
+      } finally {
+        this.submitting = false;
+      }
+    },
+    async handleDelete(series) {
+      const confirmed = window.confirm(`确定删除作品「${series.name}」吗？其下全部分集也会被删除，此操作不可恢复。`);
+      if (!confirmed) {
+        return;
+      }
+
+      this.deletingSeriesId = series.id;
+      try {
+        await this.deleteSeries(series.id);
+        this.$message.success('作品已删除');
+      } catch (error) {
+        console.error('Failed to delete series:', error);
+        this.$message.error('删除作品失败');
+      } finally {
+        this.deletingSeriesId = null;
+      }
     },
   },
 };
@@ -357,7 +425,8 @@ export default {
 
 .card-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  align-items: center;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -367,27 +436,40 @@ export default {
 }
 
 .ghost-action {
-  padding: 0.4rem 0.75rem;
+  padding: 0.32rem 0.72rem;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
   color: #0f172a;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .layout-shell.theme-dark .ghost-action {
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.82);
   color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
 }
 
 .ghost-action:hover {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(15, 23, 42, 0.08);
+  border-color: rgba(20, 184, 166, 0.45);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px);
 }
 
-.layout-shell.theme-dark .ghost-action:hover {
-  border-color: rgba(148, 163, 184, 0.35);
-  background: rgba(148, 163, 184, 0.22);
+.danger-action {
+  color: #dc2626;
+}
+
+.layout-shell.theme-dark .danger-action {
+  color: #fca5a5;
+}
+
+.danger-action:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.12);
 }
 
 .empty-state {
@@ -455,6 +537,7 @@ export default {
 
   .card-actions {
     opacity: 1;
+    flex-wrap: wrap;
   }
 }
 </style>
