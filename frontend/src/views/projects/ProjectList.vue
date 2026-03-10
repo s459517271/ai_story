@@ -78,7 +78,14 @@
           <div class="card-footer">
             <span class="meta-time">更新于 {{ formatDate(project.updated_at) }}</span>
             <div class="card-actions">
-              <button class="ghost-action" @click.stop="handleView(project.id)">进入分集</button>
+              <button class="ghost-action" @click.stop="handleEdit(project.id)">编辑</button>
+              <button
+                class="ghost-action danger-action"
+                :disabled="deletingProjectId === project.id"
+                @click.stop="handleDelete(project)"
+              >
+                {{ deletingProjectId === project.id ? '删除中...' : '删除' }}
+              </button>
             </div>
           </div>
         </article>
@@ -98,6 +105,7 @@ export default {
   data() {
     return {
       loading: false,
+      deletingProjectId: null,
       filters: {
         search: '',
         status: '',
@@ -119,7 +127,7 @@ export default {
     this.fetchData();
   },
   methods: {
-    ...mapActions('projects', ['fetchProjects']),
+    ...mapActions('projects', ['fetchProjects', 'deleteProject']),
     formatDate,
     async fetchData() {
       this.loading = true;
@@ -143,6 +151,27 @@ export default {
     },
     handleView(id) {
       this.$router.push({ name: 'ProjectDetail', params: { id } });
+    },
+    handleEdit(id) {
+      this.$router.push({ name: 'ProjectEdit', params: { id } });
+    },
+    async handleDelete(project) {
+      const displayName = project.display_name || project.name || `第${project.episode_number || '-'}集`;
+      const confirmed = window.confirm(`确定删除分集「${displayName}」吗？此操作不可恢复。`);
+      if (!confirmed) {
+        return;
+      }
+
+      this.deletingProjectId = project.id;
+      try {
+        await this.deleteProject(project.id);
+        this.$message.success('分集已删除');
+      } catch (error) {
+        console.error('Failed to delete project:', error);
+        this.$message.error('删除分集失败');
+      } finally {
+        this.deletingProjectId = null;
+      }
     },
     goSeriesList() {
       this.$router.push({ name: 'SeriesList' });
@@ -462,7 +491,8 @@ export default {
 
 .card-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  align-items: center;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -472,17 +502,40 @@ export default {
 }
 
 .ghost-action {
-  padding: 0.4rem 0.75rem;
+  padding: 0.32rem 0.72rem;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
   color: #0f172a;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghost-action:hover {
+  border-color: rgba(20, 184, 166, 0.45);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px);
 }
 
 .layout-shell.theme-dark .ghost-action {
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.82);
   color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.danger-action {
+  color: #dc2626;
+}
+
+.layout-shell.theme-dark .danger-action {
+  color: #fca5a5;
+}
+
+.danger-action:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.12);
 }
 
 .empty-state {
@@ -540,6 +593,7 @@ export default {
 
   .card-actions {
     opacity: 1;
+    flex-wrap: wrap;
   }
 }
 </style>

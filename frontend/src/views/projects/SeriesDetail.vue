@@ -53,7 +53,14 @@
           <div class="card-footer">
             <span class="meta-time">更新于 {{ formatDate(episode.updated_at) }}</span>
             <div class="card-actions">
-              <button class="ghost-action" @click.stop="goEpisode(episode.id)">进入分集</button>
+              <button class="ghost-action" @click.stop="goEditEpisode(episode.id)">编辑</button>
+              <button
+                class="ghost-action danger-action"
+                :disabled="deletingEpisodeId === episode.id"
+                @click.stop="handleDeleteEpisode(episode)"
+              >
+                {{ deletingEpisodeId === episode.id ? '删除中...' : '删除' }}
+              </button>
             </div>
           </div>
         </article>
@@ -73,6 +80,7 @@ export default {
   data() {
     return {
       loading: false,
+      deletingEpisodeId: null,
     };
   },
   computed: {
@@ -85,7 +93,7 @@ export default {
     this.fetchData();
   },
   methods: {
-    ...mapActions('projects', ['fetchSeriesDetail']),
+    ...mapActions('projects', ['fetchSeriesDetail', 'deleteProject']),
     formatDate,
     async fetchData() {
       this.loading = true;
@@ -103,6 +111,27 @@ export default {
     },
     goEpisode(id) {
       this.$router.push({ name: 'ProjectDetail', params: { id } });
+    },
+    goEditEpisode(id) {
+      this.$router.push({ name: 'ProjectEdit', params: { id } });
+    },
+    async handleDeleteEpisode(episode) {
+      const displayName = episode.display_name || episode.name || `第${episode.episode_number || '-'}集`;
+      const confirmed = window.confirm(`确定删除分集「${displayName}」吗？此操作不可恢复。`);
+      if (!confirmed) {
+        return;
+      }
+
+      this.deletingEpisodeId = episode.id;
+      try {
+        await this.deleteProject(episode.id);
+        this.$message.success('分集已删除');
+      } catch (error) {
+        console.error('Failed to delete episode:', error);
+        this.$message.error('删除分集失败');
+      } finally {
+        this.deletingEpisodeId = null;
+      }
     },
   },
 };
@@ -218,96 +247,95 @@ export default {
 .data-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
-  border-color: rgba(148, 163, 184, 0.35);
   background-size: 100% 3px, auto;
 }
 
-.card-top {
+.layout-shell.theme-dark .data-card:hover {
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.68);
+}
+
+.card-top,
+.card-meta,
+.card-footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 1rem;
 }
 
+.card-top {
+  align-items: flex-start;
+}
+
 .card-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #0f172a;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 1.1rem;
+  color: #0f172a;
 }
 
 .layout-shell.theme-dark .card-title {
-  color: #e2e8f0;
+  color: #f8fafc;
 }
 
 .card-desc {
-  margin: 0.5rem 0 0;
+  margin: 0.55rem 0 0;
   color: #64748b;
-  font-size: 0.9rem;
-  line-height: 1.65;
-}
-
-.layout-shell.theme-dark .card-desc {
-  color: #94a3b8;
+  line-height: 1.6;
 }
 
 .pill,
 .status-pill {
-  padding: 0.2rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .pill {
-  background: rgba(20, 184, 166, 0.16);
+  background: rgba(15, 23, 42, 0.06);
   color: #0f172a;
 }
 
 .status-pill {
-  background: rgba(148, 163, 184, 0.14);
-  color: #334155;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
 }
 
 .layout-shell.theme-dark .pill {
-  background: rgba(94, 234, 212, 0.22);
+  background: rgba(148, 163, 184, 0.14);
   color: #e2e8f0;
 }
 
 .layout-shell.theme-dark .status-pill {
-  background: rgba(148, 163, 184, 0.2);
-  color: #e2e8f0;
+  background: rgba(94, 234, 212, 0.12);
+  color: #99f6e4;
 }
 
 .card-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  background: rgba(148, 163, 184, 0.1);
-  border-radius: 14px;
-  padding: 0.75rem 1rem;
-}
-
-.layout-shell.theme-dark .card-meta {
-  background: rgba(30, 41, 59, 0.6);
+  padding: 1rem 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.35rem;
 }
 
-.meta-label {
-  font-size: 0.75rem;
+.meta-label,
+.meta-time {
   color: #94a3b8;
+  font-size: 0.85rem;
 }
 
 .meta-value {
-  font-size: 0.95rem;
   color: #0f172a;
   font-weight: 600;
 }
@@ -316,97 +344,105 @@ export default {
   color: #e2e8f0;
 }
 
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.meta-time {
-  font-size: 0.8rem;
-  color: #94a3b8;
-}
-
 .card-actions {
   display: flex;
-  gap: 0.5rem;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.data-card:hover .card-actions {
-  opacity: 1;
-}
-
-.ghost-action {
-  padding: 0.4rem 0.75rem;
+.ghost-action,
+.secondary-action {
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.04);
+  padding: 0.34rem 0.78rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
   color: #0f172a;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.layout-shell.theme-dark .ghost-action {
-  background: rgba(148, 163, 184, 0.16);
+.layout-shell.theme-dark .ghost-action,
+.layout-shell.theme-dark .secondary-action {
+  background: rgba(15, 23, 42, 0.82);
   color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.ghost-action:hover,
+.secondary-action:hover {
+  border-color: rgba(20, 184, 166, 0.45);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px);
+}
+
+.danger-action {
+  color: #dc2626;
+}
+
+.layout-shell.theme-dark .danger-action {
+  color: #fca5a5;
+}
+
+.danger-action:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.12);
 }
 
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 4rem 1.5rem;
   text-align: center;
-  padding: 4rem 1rem;
+  border-radius: 22px;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.layout-shell.theme-dark .empty-state {
+  background: rgba(15, 23, 42, 0.68);
+  border-color: rgba(148, 163, 184, 0.2);
 }
 
 .empty-hero {
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 600;
   color: #0f172a;
 }
 
 .layout-shell.theme-dark .empty-hero {
-  color: #e2e8f0;
+  color: #f8fafc;
 }
 
 .empty-hint {
-  color: #94a3b8;
-  margin: 0.6rem 0 1.6rem;
+  margin: 0;
+  max-width: 520px;
+  color: #64748b;
+  line-height: 1.7;
 }
 
-.secondary-action {
-  padding: 0.75rem 1.75rem;
-  border-radius: 999px;
-  background: #0f172a;
-  color: #ffffff;
-  border: none;
-}
-
-.layout-shell.theme-dark .secondary-action {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .page-shell {
-    padding: 2rem 1.5rem;
+    padding: 1.5rem;
   }
 
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .primary-action {
-    width: 100%;
-  }
-
+  .page-header,
+  .card-top,
+  .card-meta,
   .card-footer {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
   }
 
   .card-actions {
-    opacity: 1;
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 </style>
