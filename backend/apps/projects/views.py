@@ -434,10 +434,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK,
             )
 
-        # 更新项目状态为处理中
-        if project.status != "processing":
-            project.status = "processing"
-            project.save()
         # 模式2: Celery异步任务 (默认，推荐)
         return self._execute_stage_async(project, stage_name, input_data)
 
