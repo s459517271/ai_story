@@ -3,10 +3,11 @@
 职责: 提供基于日期分层的文件存储功能，自动处理文件名重复
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
+
+from django.conf import settings
 
 
 class DateBasedFileStorage:
@@ -35,7 +36,16 @@ class DateBasedFileStorage:
         Args:
             base_dir: 基础存储目录 (例如: 'storage/image' 或 'storage/video')
         """
-        self.base_dir = Path(base_dir)
+        base_path = Path(base_dir)
+        if not base_path.is_absolute():
+            storage_root = Path(getattr(settings, 'STORAGE_ROOT', Path.cwd() / 'storage'))
+
+            if base_path.parts and base_path.parts[0] == 'storage':
+                base_path = storage_root.joinpath(*base_path.parts[1:])
+            else:
+                base_path = storage_root / base_path
+
+        self.base_dir = base_path
 
     def get_unique_filepath(
         self,
