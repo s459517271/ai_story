@@ -395,27 +395,14 @@ class Text2ImageStageProcessor(StageProcessor):
 
     def _get_text2image_provider(self, project: Project) -> Optional[ModelProvider]:
         """获取文生图模型提供商"""
-        # 1. 优先从项目模型配置获取
-        config = getattr(project, 'model_config', None)
 
-        if config:
-            providers = list(config.image_providers.all())
+        # 1. 从提示词模板获取默认模型
+        template = self._get_prompt_template(project)
+        if template and template.model_provider:
+            return template.model_provider
 
-            if providers:
-                # 简化版: 使用第一个提供商
-                # TODO: 实现负载均衡策略
-                return providers[0]
 
-        # 2. 获取系统默认提供商
-        provider = ModelProvider.objects.filter(
-            provider_type='text2image',
-            is_active=True
-        ).first()
-
-        if not provider:
-            raise Exception("未找到可用的文生图模型提供商，请在后台配置")
-
-        return provider
+        return None
         
     def _get_prompt_template(self, project: Project):
         """获取提示词模板"""

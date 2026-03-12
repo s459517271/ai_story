@@ -426,26 +426,14 @@ class Image2VideoStageProcessor(StageProcessor):
         self, project: Project
     ) -> Optional[ModelProvider]:
         """获取图生视频模型提供商"""
-        # 1. 优先从项目模型配置获取
-        config = getattr(project, "model_config", None)
 
-        if config:
-            providers = list(config.video_providers.all())
+        # 1. 从提示词模板获取默认模型
+        template = self._get_prompt_template(project)
+        if template and template.model_provider:
+            return template.model_provider
 
-            if providers:
-                # 简化版: 使用第一个提供商
-                # TODO: 实现负载均衡策略
-                return providers[0]
 
-        # 2. 获取系统默认提供商
-        provider = ModelProvider.objects.filter(
-            provider_type="image2video", is_active=True
-        ).first()
-
-        if not provider:
-            raise Exception("未找到可用的图生视频模型提供商，请在后台配置")
-
-        return provider
+        return None
 
     def _generate_single_video(
         self,

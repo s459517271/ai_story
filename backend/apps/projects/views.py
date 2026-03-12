@@ -1264,14 +1264,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         project = self.get_object()
 
-        # 检查视频生成阶段是否完成
-        video_stage = ProjectStage.objects.filter(
-            project=project, stage_type="video_generation", status="completed"
-        ).first()
+        from apps.content.models import GeneratedVideo
 
-        if not video_stage:
+        has_generated_video = GeneratedVideo.objects.filter(
+            storyboard__project=project,
+            status="completed"
+        ).exists()
+
+        if not has_generated_video:
             return Response(
-                {"error": "视频生成阶段未完成，无法生成剪映草稿"},
+                {"error": "没有找到已生成的视频，无法生成剪映草稿"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

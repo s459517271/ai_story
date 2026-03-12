@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from core.redis import RedisStreamPublisher
 from core.services.jianying_draft_service import JianyingDraftGenerator
-from apps.content.models import GeneratedImage, Storyboard
+from apps.content.models import GeneratedImage, GeneratedVideo, Storyboard
 from apps.content.processors.llm_stage import LLMStageProcessor
 from apps.content.processors.text2image_stage import Text2ImageStageProcessor
 from apps.content.processors.image2video_stage import Image2VideoStageProcessor
@@ -678,24 +678,35 @@ def generate_jianying_draft(
     try:
         # 获取项目
         project = Project.objects.get(id=project_id)
-        # 检查视频生成阶段是否完成
-        video_stage = ProjectStage.objects.filter(
-            project=project,
-            stage_type='video_generation',
+        storyboards = list(
+            Storyboard.objects.filter(project=project).order_by('sequence_number')
+        )
+
+        if not storyboards:
+            raise ValueError('没有找到分镜数据，无法生成剪映草稿')
+
+        storyboard_ids = [storyboard.id for storyboard in storyboards]
+        generated_videos = GeneratedVideo.objects.filter(
+            storyboard_id__in=storyboard_ids,
             status='completed'
-        ).first()
+        ).select_related('storyboard').order_by('storyboard__sequence_number', '-created_at')
 
-        if not video_stage:
-            raise ValueError('视频生成阶段未完成，无法生成剪映草稿')
+        videos_by_storyboard = {}
+        for video in generated_videos:
+            videos_by_storyboard.setdefault(video.storyboard_id, []).append(video)
 
-        # 获取场景数据
-        scenes = video_stage.output_data.get('human_text', {}).get('scenes', [])
+        valid_scenes = []
+        for storyboard in storyboards:
+            storyboard_videos = videos_by_storyboard.get(storyboard.id, [])
+            if not storyboard_videos:
+                continue
 
-        if not scenes:
-            raise ValueError('没有找到视频场景数据')
-
-        # 过滤出有视频的场景
-        valid_scenes = [s for s in scenes if s.get('video_urls')]
+            valid_scenes.append({
+                'scene_number': storyboard.sequence_number,
+                'video_urls': [video.video_url for video in storyboard_videos if video.video_url],
+                'narration': storyboard.narration_text,
+                'narration_text': storyboard.narration_text,
+            })
 
         if not valid_scenes:
             raise ValueError('没有找到已生成的视频')
