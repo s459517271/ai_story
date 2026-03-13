@@ -6,6 +6,7 @@
 import re
 import time
 from typing import List
+from urllib.parse import urlparse
 
 import requests
 
@@ -20,6 +21,11 @@ class Text2ImageClient(BaseText2ImageClient):
 
     IMAGE_MARKDOWN_PATTERN = re.compile(r'!\[[^\]]*\]\((https?://[^)]+)\)')
     URL_PATTERN = re.compile(r'https?://\S+')
+
+    def _is_images_generations_endpoint(self, api_url: str) -> bool:
+        """判断是否为 images/generations 接口。"""
+        path = urlparse(api_url).path.rstrip('/')
+        return path.endswith('/images/generations')
 
     def _extract_image_urls(self, content: str) -> List[str]:
         """从返回内容中提取 Markdown 图片链接。"""
@@ -49,8 +55,7 @@ class Text2ImageClient(BaseText2ImageClient):
         """
         生成图片
 
-        按 OpenAI 兼容的 chat/completions 方式调用图像模型，
-        并将返回的 Markdown 图片链接转换为统一图片列表结构。
+        根据接口类型调用图像模型，并将返回结果转换为统一图片列表结构。
         """
         start_time = time.time()
 
@@ -70,22 +75,29 @@ class Text2ImageClient(BaseText2ImageClient):
         if negative_prompt:
             content = f"{content}\n\n负面提示词：{negative_prompt.strip()}"
 
-        payload = {
-            'model': model_name,
-            'messages': [
-                {
-                    'role': 'system',
-                    'content': content,
-                }
-            ],
-        }
-
-        if steps:
-            payload['steps'] = steps
-        if kwargs.get('response_format'):
-            payload['response_format'] = kwargs['response_format']
-
         request_url = api_url
+        is_images_generations = self._is_images_generations_endpoint(request_url)
+
+        if is_images_generations:
+            payload = {
+                'model': model_name,
+                'prompt': content,
+            }
+        else:
+            payload = {
+                'model': model_name,
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': content,
+                    }
+                ],
+            }
+
+            if steps:
+                payload['steps'] = steps
+            if kwargs.get('response_format'):
+                payload['response_format'] = kwargs['response_format']
 
         try:
             response = requests.post(
@@ -103,6 +115,67 @@ class Text2ImageClient(BaseText2ImageClient):
 
             result = response.json()
             latency_ms = int((time.time() - start_time) * 1000)
+
+            if is_images_generations:
+                result_data = result.get('data') or []
+                if not isinstance(result_data, list) or not result_data:
+                    return AIResponse(
+                        success=False,
+                        error='响应格式错误: 缺少data字段或data为空'
+                    )
+
+                images_data = []
+                image_urls = []
+                for item in result_data:
+                    image_url = item.get('url', '')
+                    b64_json = item.get('b64_json', '')
+
+                    if not image_url and not b64_json:
+                        continue
+
+                    if image_url:
+                        image_urls.append(image_url)
+
+                    image_item = {
+                        'width': width,
+                        'height': height,
+                    }
+                    if image_url:
+                        image_item['url'] = image_url
+                    if b64_json:
+                        image_item['b64_json'] = b64_json
+
+                    images_data.append(image_item)
+
+                if not images_data:
+                    return AIResponse(
+                        success=False,
+                        error='响应格式错误: 未从data中解析到有效图片结果',
+                        metadata={
+                            'latency_ms': latency_ms,
+                            'model': model_name,
+                            'request_url': request_url,
+                            'usage': result.get('usage', {}),
+                        }
+                    )
+
+                return AIResponse(
+                    success=True,
+                    text='\n'.join(image_urls),
+                    data=images_data,
+                    metadata={
+                        'latency_ms': latency_ms,
+                        'model': model_name,
+                        'ratio': ratio,
+                        'resolution': resolution,
+                        'width': width,
+                        'height': height,
+                        'steps': steps,
+                        'request_url': request_url,
+                        'created': result.get('created'),
+                        'usage': result.get('usage', {}),
+                    }
+                )
 
             if 'choices' not in result or not result['choices']:
                 return AIResponse(
