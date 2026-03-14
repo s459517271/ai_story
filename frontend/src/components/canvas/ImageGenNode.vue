@@ -151,7 +151,7 @@ export default {
       });
       this.lastSavedPrompt = nextPrompt;
     },
-    async handleGenerate() {
+    async handleGenerate(forceRegenerate = false) {
       if (!this.localPrompt || !this.localPrompt.trim()) {
         this.$message?.warning('请先输入提示词');
         return;
@@ -161,7 +161,8 @@ export default {
       try {
         this.$emit('generate', {
           storyboardId: this.storyboardId,
-          prompt: this.localPrompt
+          prompt: this.localPrompt,
+          forceRegenerate
         });
       } catch (error) {
         console.error('[ImageGenNode] 生成失败:', error);
@@ -171,8 +172,14 @@ export default {
       }
     },
     async handleRegenerate() {
-      if (confirm('确定要重新生成图片吗？')) {
-        await this.handleGenerate();
+      const confirmed = await this.$confirm(
+        '确定要重新生成图片吗？',
+        '重新生成图片',
+        { tone: 'warning', confirmText: '重新生成' }
+      );
+
+      if (confirmed) {
+        await this.handleGenerate(true);
       }
     }
   }

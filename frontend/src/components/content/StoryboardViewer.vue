@@ -583,7 +583,7 @@ export default {
     },
 
     // 删除卡片
-    removeCard(index) {
+    async removeCard(index) {
       // 如果本地数据为空，先从原始数据初始化
       if (this.localScenes.length === 0 && this.scenes.length > 0) {
         this.localScenes = JSON.parse(JSON.stringify(this.scenes));
@@ -601,27 +601,35 @@ export default {
       const sceneNumber = sceneToRemove.scene_number;
 
       // 确认删除
-      if (confirm(`确定要删除场景 ${sceneNumber} 吗？此操作不可恢复。`)) {
-        // 从数组中删除
-        this.localScenes.splice(index, 1);
+      const confirmed = await this.$confirm(
+        `确定要删除场景 ${sceneNumber} 吗？此操作不可恢复。`,
+        '删除场景',
+        { tone: 'danger', confirmText: '删除' }
+      );
 
-        // 重新排序场景编号
-        this.reorderSceneNumbers();
-
-        // 清除该场景的编辑状态
-        Object.keys(this.editingFields).forEach(key => {
-          if (key.startsWith(`${sceneNumber}_`)) {
-            this.$delete(this.editingFields, key);
-          }
-        });
-
-        // 触发事件通知父组件数据已更新
-        this.$emit('scenes-updated', this.localScenes);
-
-        this.$message?.success(`已删除场景 ${sceneNumber}`);
-
-        console.log('[StoryboardViewer] 删除场景:', sceneNumber);
+      if (!confirmed) {
+        return;
       }
+
+      // 从数组中删除
+      this.localScenes.splice(index, 1);
+
+      // 重新排序场景编号
+      this.reorderSceneNumbers();
+
+      // 清除该场景的编辑状态
+      Object.keys(this.editingFields).forEach(key => {
+        if (key.startsWith(`${sceneNumber}_`)) {
+          this.$delete(this.editingFields, key);
+        }
+      });
+
+      // 触发事件通知父组件数据已更新
+      this.$emit('scenes-updated', this.localScenes);
+
+      this.$message?.success(`已删除场景 ${sceneNumber}`);
+
+      console.log('[StoryboardViewer] 删除场景:', sceneNumber);
     },
 
     // 判断场景是否可编辑（所有场景都可编辑）

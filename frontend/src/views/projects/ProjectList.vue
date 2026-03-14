@@ -157,7 +157,11 @@ export default {
     },
     async handleDelete(project) {
       const displayName = project.display_name || project.name || `第${project.episode_number || '-'}集`;
-      const confirmed = window.confirm(`确定删除分集「${displayName}」吗？此操作不可恢复。`);
+      const confirmed = await this.$confirm(
+        `确定删除分集「${displayName}」吗？此操作不可恢复。`,
+        '删除分集',
+        { tone: 'danger', confirmText: '删除' }
+      );
       if (!confirmed) {
         return;
       }

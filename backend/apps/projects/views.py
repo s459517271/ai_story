@@ -588,17 +588,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
         elif stage_name == "image_generation":
             # 文生图阶段
             storyboard_ids = input_data.get("storyboard_ids", None)
+            force_regenerate = input_data.get("force_regenerate", False)
             task = execute_text2image_stage.delay(
                 project_id=str(project.id),
                 storyboard_ids=storyboard_ids,
+                force_regenerate=force_regenerate,
                 user_id=self.request.user.id,
             )
         elif stage_name == "video_generation":
             # 图生视频阶段
             storyboard_ids = input_data.get("storyboard_ids", None)
+            force_regenerate = input_data.get("force_regenerate", False)
             task = execute_image2video_stage.delay(
                 project_id=str(project.id),
                 storyboard_ids=storyboard_ids,
+                force_regenerate=force_regenerate,
                 user_id=self.request.user.id,
             )
         else:

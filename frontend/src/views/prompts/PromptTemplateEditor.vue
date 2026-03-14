@@ -726,9 +726,10 @@ export default {
               (s) => s.value === this.formData.stage_type
             )?.label || this.formData.stage_type;
 
-            const confirmed = confirm(
-              `该提示词集中已存在 "${stageLabel}" 类型的模板。\n\n` +
-              `创建新模板将替换现有模板。是否继续？`
+            const confirmed = await this.$confirm(
+              `该提示词集中已存在 "${stageLabel}" 类型的模板。\n\n创建新模板将替换现有模板。是否继续？`,
+              '模板覆盖确认',
+              { tone: 'warning', confirmText: '继续创建' }
             );
 
             if (!confirmed) {

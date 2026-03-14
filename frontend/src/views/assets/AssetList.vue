@@ -221,7 +221,8 @@ export default {
 
       const confirmed = await this.$confirm(
         `确定要删除资产 "${asset.key}" 吗？`,
-        '删除确认'
+        '删除资产',
+        { tone: 'danger', confirmText: '删除' }
       );
 
       if (!confirmed) return;

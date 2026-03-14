@@ -168,8 +168,8 @@
                   v-model.number="extraConfig.width"
                   type="number"
                   min="256"
-                  max="2048"
-                  step="64"
+                  max="10240"
+                  step="32"
                   class="input input-bordered"
                   placeholder="1024"
                 />
@@ -183,8 +183,8 @@
                   v-model.number="extraConfig.height"
                   type="number"
                   min="256"
-                  max="2048"
-                  step="64"
+                  max="10240"
+                  step="32"
                   class="input input-bordered"
                   placeholder="1024"
                 />

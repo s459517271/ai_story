@@ -110,11 +110,12 @@ export default {
     }
   },
   methods: {
-    async handleGenerate() {
+    async handleGenerate(forceRegenerate = false) {
       this.isGenerating = true;
       try {
         this.$emit('generate', {
-          storyboardId: this.storyboardId
+          storyboardId: this.storyboardId,
+          forceRegenerate
         });
       } catch (error) {
         console.error('[VideoGenNode] 生成失败:', error);
@@ -124,8 +125,14 @@ export default {
       }
     },
     async handleRegenerate() {
-      if (confirm('确定要重新生成视频吗？')) {
-        await this.handleGenerate();
+      const confirmed = await this.$confirm(
+        '确定要重新生成视频吗？',
+        '重新生成视频',
+        { tone: 'warning', confirmText: '重新生成' }
+      );
+
+      if (confirmed) {
+        await this.handleGenerate(true);
       }
     }
   }

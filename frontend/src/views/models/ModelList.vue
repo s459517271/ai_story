@@ -226,7 +226,13 @@ export default {
     },
 
     async handleDelete(provider) {
-      if (!confirm(`确定要删除模型 "${provider.name}" 吗?`)) {
+      const confirmed = await this.$confirm(
+        `确定要删除模型 "${provider.name}" 吗?`,
+        '删除模型',
+        { tone: 'danger', confirmText: '删除' }
+      )
+
+      if (!confirmed) {
         return
       }
 

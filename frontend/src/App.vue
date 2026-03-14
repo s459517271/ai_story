@@ -1,14 +1,19 @@
 <template>
   <div id="app" :data-theme="theme" class="app-shell">
     <router-view />
+    <ConfirmDialog />
   </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 
 export default {
   name: 'App',
+  components: {
+    ConfirmDialog,
+  },
   computed: {
     ...mapGetters('ui', ['theme']),
   },

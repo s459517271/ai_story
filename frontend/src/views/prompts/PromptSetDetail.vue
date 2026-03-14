@@ -392,7 +392,13 @@ export default {
     },
 
     async handleDelete() {
-      if (!confirm(`确定要删除提示词集 "${this.promptSet.name}" 吗?此操作不可恢复。`)) {
+      const confirmed = await this.$confirm(
+        `确定要删除提示词集 "${this.promptSet.name}" 吗?此操作不可恢复。`,
+        '删除提示词集',
+        { tone: 'danger', confirmText: '删除' }
+      );
+
+      if (!confirmed) {
         return;
       }
 
@@ -433,7 +439,13 @@ export default {
     },
 
     async handleDeleteTemplate(template) {
-      if (!confirm(`确定要删除 "${template.stage_type_display}" 模板吗?`)) {
+      const confirmed = await this.$confirm(
+        `确定要删除 "${template.stage_type_display}" 模板吗?`,
+        '删除模板',
+        { tone: 'danger', confirmText: '删除' }
+      );
+
+      if (!confirmed) {
         return;
       }
 

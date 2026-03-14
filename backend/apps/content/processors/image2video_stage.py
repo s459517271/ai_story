@@ -201,7 +201,10 @@ class Image2VideoStageProcessor(StageProcessor):
             return StageResult(success=False, error=str(e), can_retry=True)
 
     def process_stream(
-        self, project_id: str, storyboard_ids: List[int] = None
+        self,
+        project_id: str,
+        storyboard_ids: List[int] = None,
+        force_regenerate: bool = False,
     ) -> Generator[Dict[str, Any], None, None]:
         """
         流式执行图生视频生成
@@ -210,6 +213,7 @@ class Image2VideoStageProcessor(StageProcessor):
         Args:
             project_id: 项目ID
             storyboard_ids: 指定要生成的分镜ID列表(可选,默认生成所有)
+            force_regenerate: 是否强制重生成已完成分镜视频
 
         Yields:
             Dict包含: type (progress/task_created/task_status/video_generated/done/error), content, data
@@ -243,6 +247,16 @@ class Image2VideoStageProcessor(StageProcessor):
             # 如果指定了分镜ID,则只处理这些分镜
             if storyboard_ids:
                 storyboards_query = storyboards_query.filter(id__in=storyboard_ids)
+
+            completed_storyboard_ids = set(
+                GeneratedVideo.objects.filter(
+                    storyboard__project=project,
+                    status='completed'
+                ).values_list('storyboard_id', flat=True).distinct()
+            )
+
+            if not force_regenerate:
+                storyboards_query = storyboards_query.exclude(id__in=completed_storyboard_ids)
 
             storyboards = list(storyboards_query)
 

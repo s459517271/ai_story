@@ -431,7 +431,13 @@ export default {
       await this.handleExecute();
     },
     async handleReset() {
-      if (confirm('确定要重新生成吗？这将覆盖当前内容。')) {
+      const confirmed = await this.$confirm(
+        '确定要重新生成吗？这将覆盖当前内容。',
+        '重新生成确认',
+        { tone: 'warning', confirmText: '重新生成' }
+      );
+
+      if (confirmed) {
         await this.handleExecute();
       }
     },

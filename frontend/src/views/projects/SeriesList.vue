@@ -202,7 +202,11 @@ export default {
       }
     },
     async handleDelete(series) {
-      const confirmed = window.confirm(`确定删除作品「${series.name}」吗？其下全部分集也会被删除，此操作不可恢复。`);
+      const confirmed = await this.$confirm(
+        `确定删除作品「${series.name}」吗？其下全部分集也会被删除，此操作不可恢复。`,
+        '删除作品',
+        { tone: 'danger', confirmText: '删除' }
+      );
       if (!confirmed) {
         return;
       }

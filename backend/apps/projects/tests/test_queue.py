@@ -6,7 +6,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.content.models import ContentRewrite
+from apps.content.models import CameraMovement, ContentRewrite, GeneratedImage, GeneratedVideo, Storyboard
+from apps.projects.tasks import _get_missing_image_storyboard_ids, _get_missing_video_storyboard_ids
 from apps.projects.models import EpisodeTaskQueue, Project, ProjectStage, Series
 
 
@@ -184,3 +185,158 @@ class ProjectQueueAPITestCase(APITestCase):
         self.assertEqual(self.project1.status, 'processing')
         self.assertEqual(rewrite_stage.status, 'pending')
         self.assertEqual(rewrite_stage.error_message, '')
+
+
+class ImageRegenerateBehaviorTestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='image-user', password='secret123')
+        self.client.force_authenticate(self.user)
+        self.series = Series.objects.create(name='图片重生成', description='测试', user=self.user)
+        self.project = Project.objects.create(
+            user=self.user,
+            series=self.series,
+            episode_number=1,
+            sort_order=1,
+            episode_title='第1集',
+            name='图片项目',
+            original_topic='测试图片重生成',
+        )
+        initialize_project(self.project)
+        self.storyboard = Storyboard.objects.create(
+            project=self.project,
+            sequence_number=1,
+            scene_description='场景1',
+            narration_text='旁白1',
+            image_prompt='提示词1',
+        )
+
+    def test_get_missing_image_storyboard_ids_skips_completed_by_default(self):
+        GeneratedImage.objects.create(
+            storyboard=self.storyboard,
+            image_url='https://example.com/image-1.png',
+            generation_params={},
+            status='completed',
+        )
+
+        result = _get_missing_image_storyboard_ids(self.project, [str(self.storyboard.id)])
+
+        self.assertEqual(result, [])
+
+    def test_get_missing_image_storyboard_ids_includes_completed_when_forced(self):
+        GeneratedImage.objects.create(
+            storyboard=self.storyboard,
+            image_url='https://example.com/image-1.png',
+            generation_params={},
+            status='completed',
+        )
+
+        result = _get_missing_image_storyboard_ids(
+            self.project,
+            [str(self.storyboard.id)],
+            force_regenerate=True,
+        )
+
+        self.assertEqual(result, [str(self.storyboard.id)])
+
+    @patch('apps.projects.tasks.execute_text2image_stage.delay')
+    def test_execute_stage_passes_force_regenerate_flag(self, mock_delay):
+        mock_delay.return_value = SimpleNamespace(id='celery-image-task')
+
+        response = self.client.post(
+            reverse('project-execute-stage', args=[self.project.id]),
+            {
+                'stage_name': 'image_generation',
+                'input_data': {
+                    'storyboard_ids': [str(self.storyboard.id)],
+                    'force_regenerate': True,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        mock_delay.assert_called_once_with(
+            project_id=str(self.project.id),
+            storyboard_ids=[str(self.storyboard.id)],
+            force_regenerate=True,
+            user_id=self.user.id,
+        )
+
+
+    def test_get_missing_video_storyboard_ids_skips_completed_by_default(self):
+        image = GeneratedImage.objects.create(
+            storyboard=self.storyboard,
+            image_url='https://example.com/image-1.png',
+            generation_params={},
+            status='completed',
+        )
+        camera_movement = CameraMovement.objects.create(
+            storyboard=self.storyboard,
+            movement_type='static',
+            movement_params={},
+        )
+        GeneratedVideo.objects.create(
+            storyboard=self.storyboard,
+            image=image,
+            camera_movement=camera_movement,
+            video_url='https://example.com/video-1.mp4',
+            generation_params={},
+            status='completed',
+        )
+
+        result = _get_missing_video_storyboard_ids(self.project, [str(self.storyboard.id)])
+
+        self.assertEqual(result, [])
+
+    def test_get_missing_video_storyboard_ids_includes_completed_when_forced(self):
+        image = GeneratedImage.objects.create(
+            storyboard=self.storyboard,
+            image_url='https://example.com/image-1.png',
+            generation_params={},
+            status='completed',
+        )
+        camera_movement = CameraMovement.objects.create(
+            storyboard=self.storyboard,
+            movement_type='static',
+            movement_params={},
+        )
+        GeneratedVideo.objects.create(
+            storyboard=self.storyboard,
+            image=image,
+            camera_movement=camera_movement,
+            video_url='https://example.com/video-1.mp4',
+            generation_params={},
+            status='completed',
+        )
+
+        result = _get_missing_video_storyboard_ids(
+            self.project,
+            [str(self.storyboard.id)],
+            force_regenerate=True,
+        )
+
+        self.assertEqual(result, [str(self.storyboard.id)])
+
+    @patch('apps.projects.tasks.execute_image2video_stage.delay')
+    def test_execute_stage_passes_video_force_regenerate_flag(self, mock_delay):
+        mock_delay.return_value = SimpleNamespace(id='celery-video-task')
+
+        response = self.client.post(
+            reverse('project-execute-stage', args=[self.project.id]),
+            {
+                'stage_name': 'video_generation',
+                'input_data': {
+                    'storyboard_ids': [str(self.storyboard.id)],
+                    'force_regenerate': True,
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        mock_delay.assert_called_once_with(
+            project_id=str(self.project.id),
+            storyboard_ids=[str(self.storyboard.id)],
+            force_regenerate=True,
+            user_id=self.user.id,
+        )

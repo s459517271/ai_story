@@ -1132,8 +1132,8 @@ export default {
       this.$emit('save-stage', { stageType, outputData, silent, skipRefresh });
     },
 
-    async handleGenerateImage({ storyboardId, prompt }) {
-      console.log('[ProjectCanvas] 生成图片:', { storyboardId, prompt });
+    async handleGenerateImage({ storyboardId, prompt, forceRegenerate = false }) {
+      console.log('[ProjectCanvas] 生成图片:', { storyboardId, prompt, forceRegenerate });
 
       try {
         // 查找对应的分镜数据
@@ -1156,6 +1156,10 @@ export default {
             shot_type: storyboard.shot_type || '标准镜头',
           }]
         };
+
+        if (forceRegenerate) {
+          inputData.force_regenerate = true;
+        }
 
         // 触发执行事件
         this.$emit('execute-stage', {
@@ -1216,8 +1220,8 @@ export default {
       }
     },
 
-    async handleGenerateVideo({ storyboardId }) {
-      console.log('[ProjectCanvas] 生成视频:', { storyboardId });
+    async handleGenerateVideo({ storyboardId, forceRegenerate = false }) {
+      console.log('[ProjectCanvas] 生成视频:', { storyboardId, forceRegenerate });
 
       try {
         // 查找对应的分镜数据
@@ -1261,6 +1265,10 @@ export default {
             }
           }]
         };
+
+        if (forceRegenerate) {
+          inputData.force_regenerate = true;
+        }
 
         // 触发执行事件
         this.$emit('execute-stage', {

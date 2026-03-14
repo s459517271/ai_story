@@ -50,12 +50,19 @@ def _unregister_project_task(project_id: str, task_id: str) -> None:
         cache.delete(_project_task_cache_key(project_id))
 
 
-def _get_missing_image_storyboard_ids(project: Project, storyboard_ids=None):
-    """返回仍未生成完成图片的分镜ID列表。"""
+def _get_missing_image_storyboard_ids(
+    project: Project,
+    storyboard_ids=None,
+    force_regenerate: bool = False,
+):
+    """返回需要执行图片生成的分镜ID列表。"""
     storyboards_query = Storyboard.objects.filter(project=project).order_by('sequence_number')
 
     if storyboard_ids is not None:
         storyboards_query = storyboards_query.filter(id__in=storyboard_ids)
+
+    if force_regenerate:
+        return [str(storyboard.id) for storyboard in storyboards_query]
 
     completed_storyboard_ids = set(
         GeneratedImage.objects.filter(
@@ -79,6 +86,30 @@ def _is_image_generation_complete(project: Project) -> bool:
     ).values('storyboard_id').distinct().count()
 
     return completed_storyboards >= total_storyboards
+
+
+def _get_missing_video_storyboard_ids(
+    project: Project,
+    storyboard_ids=None,
+    force_regenerate: bool = False,
+):
+    """返回需要执行视频生成的分镜ID列表。"""
+    storyboards_query = Storyboard.objects.filter(project=project).order_by('sequence_number')
+
+    if storyboard_ids is not None:
+        storyboards_query = storyboards_query.filter(id__in=storyboard_ids)
+
+    if force_regenerate:
+        return [str(storyboard.id) for storyboard in storyboards_query]
+
+    completed_storyboard_ids = set(
+        GeneratedVideo.objects.filter(
+            storyboard__project=project,
+            status='completed'
+        ).values_list('storyboard_id', flat=True).distinct()
+    )
+
+    return [str(storyboard.id) for storyboard in storyboards_query if storyboard.id not in completed_storyboard_ids]
 
 
 def _mark_stage_paused(project_id: str, stage_name: str) -> None:
@@ -297,6 +328,7 @@ def execute_text2image_stage(
     self,
     project_id: str,
     storyboard_ids: list = None,
+    force_regenerate: bool = False,
     user_id: int = None
 ) -> Dict[str, Any]:
     """
@@ -306,6 +338,7 @@ def execute_text2image_stage(
         self: Celery任务实例
         project_id: 项目ID
         storyboard_ids: 分镜ID列表 (可选，为空则处理所有分镜)
+        force_regenerate: 是否强制重生成已完成分镜
         user_id: 用户ID
 
     Returns:
@@ -337,7 +370,11 @@ def execute_text2image_stage(
                 'message': message,
             }
 
-        pending_storyboard_ids = _get_missing_image_storyboard_ids(project, storyboard_ids)
+        pending_storyboard_ids = _get_missing_image_storyboard_ids(
+            project,
+            storyboard_ids,
+            force_regenerate=force_regenerate,
+        )
 
         # 更新阶段状态
         stage.status = 'processing'
@@ -357,7 +394,8 @@ def execute_text2image_stage(
         # 执行流式处理
         for chunk in processor.process_stream(
             project_id=project_id,
-            storyboard_ids=pending_storyboard_ids if storyboard_ids is not None else None
+            storyboard_ids=pending_storyboard_ids if storyboard_ids is not None or force_regenerate else None,
+            force_regenerate=force_regenerate,
         ):
             chunk_type = chunk.get('type')
 
@@ -488,6 +526,7 @@ def execute_image2video_stage(
     self,
     project_id: str,
     storyboard_ids: list = None,
+    force_regenerate: bool = False,
     user_id: int = None
 ) -> Dict[str, Any]:
     """
@@ -497,6 +536,7 @@ def execute_image2video_stage(
         self: Celery任务实例
         project_id: 项目ID
         storyboard_ids: 分镜ID列表 (可选，为空则处理所有分镜)
+        force_regenerate: 是否强制重生成已完成分镜视频
         user_id: 用户ID
 
     Returns:
@@ -528,6 +568,12 @@ def execute_image2video_stage(
                 'message': message,
             }
 
+        pending_storyboard_ids = _get_missing_video_storyboard_ids(
+            project,
+            storyboard_ids,
+            force_regenerate=force_regenerate,
+        )
+
         # 更新阶段状态
         stage.status = 'processing'
         stage.started_at = timezone.now()
@@ -546,7 +592,8 @@ def execute_image2video_stage(
         # 执行流式处理
         for chunk in processor.process_stream(
             project_id=project_id,
-            storyboard_ids=storyboard_ids
+            storyboard_ids=pending_storyboard_ids if storyboard_ids is not None or force_regenerate else None,
+            force_regenerate=force_regenerate,
         ):
             chunk_type = chunk.get('type')
 

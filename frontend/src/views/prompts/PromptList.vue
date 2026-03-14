@@ -321,7 +321,13 @@ export default {
     },
 
     async handleDelete(set) {
-      if (!confirm(`确定要删除提示词集 "${set.name}" 吗？此操作不可恢复。`)) {
+      const confirmed = await this.$confirm(
+        `确定要删除提示词集 "${set.name}" 吗？此操作不可恢复。`,
+        '删除提示词集',
+        { tone: 'danger', confirmText: '删除' }
+      );
+
+      if (!confirmed) {
         return;
       }
 

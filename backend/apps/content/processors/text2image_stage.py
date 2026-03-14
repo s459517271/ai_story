@@ -93,14 +93,16 @@ class Text2ImageStageProcessor(StageProcessor):
     def process(
         self,
         project_id: str,
-        storyboard_ids: List[str] = None
+        storyboard_ids: List[str] = None,
+        force_regenerate: bool = False,
     ) -> Generator[Dict[str, Any], None, None]:
         pass
 
     def process_stream(
         self,
         project_id: str,
-        storyboard_ids: List[str] = None
+        storyboard_ids: List[str] = None,
+        force_regenerate: bool = False,
     ) -> Generator[Dict[str, Any], None, None]:
         """
         流式执行文生图生成
@@ -109,6 +111,7 @@ class Text2ImageStageProcessor(StageProcessor):
         Args:
             project_id: 项目ID
             storyboard_ids: 指定要生成的分镜ID列表(可选,默认生成所有)
+            force_regenerate: 是否强制重生成已完成分镜
 
         Yields:
             Dict包含: type (progress/image_generated/done/error), content, data
@@ -164,7 +167,9 @@ class Text2ImageStageProcessor(StageProcessor):
                 ).values_list('storyboard_id', flat=True).distinct()
             )
 
-            storyboards_query = target_storyboards_query.exclude(id__in=completed_storyboard_ids)
+            storyboards_query = target_storyboards_query
+            if not force_regenerate:
+                storyboards_query = storyboards_query.exclude(id__in=completed_storyboard_ids)
             storyboards = list(storyboards_query)
             skipped_count = target_storyboards_count - len(storyboards)
 

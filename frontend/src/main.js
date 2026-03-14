@@ -6,6 +6,7 @@ import App from './App.vue';
 import router from './router';
 import store from './store';
 import message from '@/utils/message';
+import confirm from '@/utils/confirm';
 
 // 全局配置
 Vue.config.productionTip = false;
@@ -14,15 +15,7 @@ Vue.config.productionTip = false;
 Vue.prototype.$message = message;
 
 // 全局confirm对话框
-Vue.prototype.$confirm = (msg, title = '确认', options = {}) => {
-  return new Promise((resolve, reject) => {
-    if (window.confirm(msg)) {
-      resolve(true);
-    } else {
-      reject('cancel');
-    }
-  });
-};
+Vue.prototype.$confirm = (msg, title = '确认', options = {}) => confirm.open(msg, title, options);
 
 // 全局错误处理
 Vue.config.errorHandler = (err, vm, info) => {

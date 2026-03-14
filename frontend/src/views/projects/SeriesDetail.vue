@@ -184,7 +184,11 @@ export default {
     },
     async handleForceRelease(episode) {
       const displayName = episode.display_name || episode.name || `第${episode.episode_number || '-'}集`;
-      const confirmed = window.confirm(`确定释放分集「${displayName}」的队列任务吗？`);
+      const confirmed = await this.$confirm(
+        `确定释放分集「${displayName}」的队列任务吗？`,
+        '释放队列',
+        { tone: 'warning', confirmText: '确认释放' }
+      );
       if (!confirmed) {
         return;
       }
@@ -208,7 +212,11 @@ export default {
     },
     async handleDeleteEpisode(episode) {
       const displayName = episode.display_name || episode.name || `第${episode.episode_number || '-'}集`;
-      const confirmed = window.confirm(`确定删除分集「${displayName}」吗？此操作不可恢复。`);
+      const confirmed = await this.$confirm(
+        `确定删除分集「${displayName}」吗？此操作不可恢复。`,
+        '删除分集',
+        { tone: 'danger', confirmText: '删除' }
+      );
       if (!confirmed) {
         return;
       }
