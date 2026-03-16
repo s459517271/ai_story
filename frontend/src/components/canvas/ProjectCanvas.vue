@@ -1316,7 +1316,14 @@ export default {
       });
     },
 
+    useAdvancedImageFlow(storyboard) {
+      return storyboard?.multi_grid_image?.template_enabled !== false || storyboard?.image_edit?.template_enabled !== false;
+    },
+
     showImageNode(storyboard) {
+      if (this.useAdvancedImageFlow(storyboard)) {
+        return false;
+      }
       return storyboard?.image_generation?.template_enabled !== false;
     },
 
@@ -1951,6 +1958,8 @@ export default {
         rewrite: false,
         storyboard: false,
         image_generation: false,
+        multi_grid_image: false,
+        image_edit: false,
         camera_movement: false,
         video_generation: false
       };

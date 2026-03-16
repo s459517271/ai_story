@@ -249,6 +249,8 @@ def _launch_queue_task(queue_task_id: str) -> EpisodeTaskQueue:
                 force_regenerate=payload.get('force_regenerate', False),
                 user_id=queue_task.created_by_id,
             )
+        elif stage_name in ['multi_grid_image', 'image_edit']:
+            raise ValueError(f'阶段 {stage_name} 暂未接入队列执行器')
         else:
             raise ValueError(f'未知阶段类型: {stage_name}')
     else:

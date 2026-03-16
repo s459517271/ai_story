@@ -352,8 +352,10 @@ export const STAGE_TYPES = [
   { value: 'rewrite', label: '文案改写' },
   { value: 'storyboard', label: '分镜生成' },
   { value: 'image_generation', label: '文生图' },
+  { value: 'multi_grid_image', label: '多宫格图片' },
   { value: 'camera_movement', label: '运镜生成' },
   { value: 'video_generation', label: '图生视频' },
+  { value: 'image_edit', label: '图片编辑' },
 ];
 
 /**

@@ -191,7 +191,7 @@
 
     <!-- 输入/输出编辑区域 -->
     <div
-      v-if="['rewrite','storyboard', 'camera_movement', 'image_generation', 'video_generation'].indexOf(stageType) !==-1"
+      v-if="['rewrite','storyboard', 'camera_movement', 'image_generation', 'multi_grid_image', 'video_generation', 'image_edit'].indexOf(stageType) !==-1"
       class="grid grid-cols-1 lg:grid-cols-2 gap-4"
     >
       <!-- 输入数据 -->
@@ -293,7 +293,7 @@
 
     <!-- 分镜可视化展示区域 -->
     <div
-      v-if="['storyboard', 'image_generation','camera_movement', 'video_generation'].indexOf(stageType) !==-1 && localOutputData"
+      v-if="['storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'].indexOf(stageType) !==-1 && localOutputData"
       class="mt-6"
     >
       <div class="divider">
@@ -327,7 +327,7 @@ export default {
     stageType: {
       type: String,
       required: true,
-      validator: (value) => ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation'].includes(value),
+      validator: (value) => ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'].includes(value),
     },
     stage: {
       type: Object,
@@ -423,7 +423,7 @@ export default {
 
     // 获取前一个阶段的数据
     getPreviousStage() {
-      const stageOrder = ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation'];
+      const stageOrder = ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'];
       const currentIndex = stageOrder.indexOf(this.stageType);
       if (currentIndex > 0) {
         const previousType = stageOrder[currentIndex - 1];
@@ -496,6 +496,8 @@ export default {
         rewrite: '输入原始文案或上一阶段的输出结果',
         storyboard: '输入改写后的文案',
         image_generation: '输入分镜描述(JSON数组格式)',
+        multi_grid_image: '输入多宫格生成参数(JSON格式)',
+        image_edit: '输入图片编辑参数(JSON格式)',
         camera_movement: '输入生成的图片信息',
         video_generation: '输入运镜参数',
       };

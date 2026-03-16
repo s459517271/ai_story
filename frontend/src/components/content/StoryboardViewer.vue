@@ -675,7 +675,7 @@ export default {
     stageType: {
       type: String,
       required: true,
-      validator: (value) => ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation'].includes(value),
+      validator: (value) => ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'].includes(value),
     },
   },
   data() {
@@ -1048,8 +1048,10 @@ export default {
         rewrite: '文案改写',
         storyboard: '分镜生成',
         image_generation: '文生图',
+        multi_grid_image: '多宫格图片',
         camera_movement: '运镜生成',
         video_generation: '图生视频',
+        image_edit: '图片编辑',
       };
       return names[this.stageType] || this.stageType;
     },

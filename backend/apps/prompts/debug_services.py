@@ -33,7 +33,9 @@ class PromptDebugService:
         'storyboard': 'llm',
         'camera_movement': 'llm',
         'image_generation': 'text2image',
+        'multi_grid_image': 'text2image',
         'video_generation': 'image2video',
+        'image_edit': 'image_edit',
     }
 
     @classmethod
@@ -210,6 +212,46 @@ class PromptDebugService:
                 'images': response.data,
             },
         }
+
+    @classmethod
+    def _run_image_edit(
+        cls,
+        provider: ModelProvider,
+        rendered_prompt: str,
+        input_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        start_time = time.time()
+        client = create_ai_client(provider)
+        image_url = input_payload.get('image_url') or input_payload.get('source_image_url') or input_payload.get('url')
+        if not image_url:
+            raise ValueError('图片编辑调试缺少 image_url')
+
+        response = client.generate(
+            image_url=image_url,
+            prompt=rendered_prompt,
+            mask_url=input_payload.get('mask_url', ''),
+            strength=input_payload.get('strength', 0.35),
+            width=input_payload.get('width', 1024),
+            height=input_payload.get('height', 1024),
+        )
+        if inspect.isawaitable(response):
+            response = asyncio.run(response)
+
+        latency_ms = int((time.time() - start_time) * 1000)
+        if not response.success:
+            raise ValueError(response.error or '图片编辑调试执行失败')
+        return {
+            'raw_text': response.text or '',
+            'raw_response': {
+                'data': response.data,
+                'metadata': response.metadata,
+            },
+            'latency_ms': response.metadata.get('latency_ms', latency_ms),
+            'parsed_output': {
+                'images': response.data,
+            },
+        }
+
 
     @classmethod
     def _run_image2video(
@@ -642,11 +684,14 @@ class PromptDebugService:
         if session.stage_type in ('rewrite', 'storyboard', 'camera_movement'):
             result = cls._run_llm(provider, rendered_prompt)
             parsed_output = cls.parse_output(session.stage_type, result['raw_text'])
-        elif session.stage_type == 'image_generation':
+        elif session.stage_type in ('image_generation', 'multi_grid_image'):
             result = cls._run_text2image(provider, rendered_prompt, input_payload or {})
             parsed_output = result['parsed_output']
         elif session.stage_type == 'video_generation':
             result = cls._run_image2video(provider, rendered_prompt, input_payload or {})
+            parsed_output = result['parsed_output']
+        elif session.stage_type == 'image_edit':
+            result = cls._run_image_edit(provider, rendered_prompt, input_payload or {})
             parsed_output = result['parsed_output']
         else:
             raise ValueError('暂不支持的调试阶段')

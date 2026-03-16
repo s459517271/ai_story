@@ -502,8 +502,10 @@ export default {
         rewrite: 'llm',
         storyboard: 'llm',
         image_generation: 'text2image',
+        multi_grid_image: 'text2image',
         camera_movement: 'llm',
         video_generation: 'image2video',
+        image_edit: 'image_edit',
       },
     };
   },
@@ -672,6 +674,7 @@ export default {
         llm: 'LLM模型',
         text2image: '文生图模型',
         image2video: '图生视频模型',
+        image_edit: '图片编辑模型',
       };
 
       return `当前阶段需要 ${typeLabels[providerType] || providerType} 类型的模型`;

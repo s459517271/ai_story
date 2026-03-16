@@ -324,7 +324,9 @@ const STAGE_LABELS = {
   storyboard: 'LLM 阶段',
   camera_movement: 'LLM 阶段',
   image_generation: '文生图',
-  video_generation: '图生视频'
+  multi_grid_image: '多宫格图片',
+  video_generation: '图生视频',
+  image_edit: '图片编辑'
 }
 
 const ARTIFACT_LABELS = {
@@ -377,15 +379,21 @@ export default {
       return this.lastRun?.id || ''
     },
     canSelectSource() {
-      return ['image_generation', 'video_generation'].includes(this.session?.stage_type)
+      return ['image_generation', 'multi_grid_image', 'video_generation', 'image_edit'].includes(this.session?.stage_type)
     },
     inputPlaceholder() {
       const stageType = this.session?.stage_type
       if (stageType === 'image_generation') {
         return '{"negative_prompt":"低质量","ratio":"1:1"}'
       }
+      if (stageType === 'multi_grid_image') {
+        return '{"negative_prompt":"低质量","ratio":"1:1","grid_rows":2,"grid_cols":2}'
+      }
       if (stageType === 'video_generation') {
         return '{"image_url":"https://...","duration":5,"fps":24}'
+      }
+      if (stageType === 'image_edit') {
+        return '{"image_url":"https://...","strength":0.35,"width":1536,"height":1536}'
       }
       return '请输入用户提示词文本'
     },
@@ -465,11 +473,14 @@ export default {
       if (['rewrite', 'storyboard', 'camera_movement'].includes(stageType)) {
         return 'llm'
       }
-      if (stageType === 'image_generation') {
+      if (stageType === 'image_generation' || stageType === 'multi_grid_image') {
         return 'text2image'
       }
       if (stageType === 'video_generation') {
         return 'image2video'
+      }
+      if (stageType === 'image_edit') {
+        return 'image_edit'
       }
       return ''
     },
@@ -590,12 +601,17 @@ export default {
         this.linkedArtifacts = []
         return
       }
-      if (session.stage_type === 'image_generation') {
+      if (session.stage_type === 'image_generation' || session.stage_type === 'multi_grid_image') {
         const response = await this.fetchDebugArtifacts({ stage_type: 'storyboard', artifact_type: 'storyboard_item' })
         this.linkedArtifacts = response.results || response || []
         return
       }
       if (session.stage_type === 'video_generation') {
+        const response = await this.fetchDebugArtifacts({ stage_type: 'image_generation', artifact_type: 'image' })
+        this.linkedArtifacts = response.results || response || []
+        return
+      }
+      if (session.stage_type === 'image_edit') {
         const response = await this.fetchDebugArtifacts({ stage_type: 'image_generation', artifact_type: 'image' })
         this.linkedArtifacts = response.results || response || []
         return

@@ -15,7 +15,7 @@ User = get_user_model()
 
 
 def initialize_project(project):
-    for stage_type in ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']:
+    for stage_type in ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']:
         ProjectStage.objects.create(project=project, stage_type=stage_type, status='pending')
     ContentRewrite.objects.create(project=project, original_text=project.original_topic)
 

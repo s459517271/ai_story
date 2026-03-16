@@ -50,7 +50,7 @@ from .serializers import (
     StageExecuteSerializer,
     StageRetrySerializer,
 )
-from .utils import get_stage_template_states, is_stage_template_enabled
+from .utils import get_project_stage_order, get_stage_template_states, is_stage_template_enabled
 
 
 class SeriesViewSet(viewsets.ModelViewSet):
@@ -678,8 +678,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         # 获取其他阶段用于数据整合
         image_stage = project.stages.filter(stage_type='image_generation').first()
+        multi_grid_stage = project.stages.filter(stage_type='multi_grid_image').first()
         camera_stage = project.stages.filter(stage_type='camera_movement').first()
         video_stage = project.stages.filter(stage_type='video_generation').first()
+        image_edit_stage = project.stages.filter(stage_type='image_edit').first()
 
         result = []
 
@@ -724,8 +726,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     project,
                     storyboard_data['domain_data'],
                     image_stage,
+                    multi_grid_stage,
                     camera_stage,
                     video_stage,
+                    image_edit_stage,
                     stage_template_states
                 )
 
@@ -733,16 +737,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         return Response(result)
 
-    def _integrate_stage_data(self, project, storyboard_domain_data, image_stage, camera_stage, video_stage, stage_template_states=None):
+    def _integrate_stage_data(self, project, storyboard_domain_data, image_stage, multi_grid_stage, camera_stage, video_stage, image_edit_stage, stage_template_states=None):
         """
-        将 image_generation、camera_movement、video_generation 数据整合到 storyboard 的 domain_data 中
+        将 image_generation、multi_grid_image、camera_movement、video_generation、image_edit 数据整合到 storyboard 的 domain_data 中
 
         Args:
             project: 项目对象
             storyboard_domain_data: storyboard 的原始 domain_data
             image_stage: image_generation 阶段对象
+            multi_grid_stage: multi_grid_image 阶段对象
             camera_stage: camera_movement 阶段对象
             video_stage: video_generation 阶段对象
+            image_edit_stage: image_edit 阶段对象
             stage_template_states: 各阶段模板启用状态
 
         Returns:
@@ -765,6 +771,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 'status': image_stage.status if image_stage else 'pending',
                 'images': []
             }
+            sb_data['multi_grid_image'] = {
+                'template_enabled': stage_template_states.get('multi_grid_image', True),
+                'status': multi_grid_stage.status if multi_grid_stage else 'pending',
+                'tasks': []
+            }
             sb_data['camera_movement'] = {
                 'template_enabled': stage_template_states.get('camera_movement', True),
                 'status': camera_stage.status if camera_stage else 'pending',
@@ -774,6 +785,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 'template_enabled': stage_template_states.get('video_generation', True),
                 'status': video_stage.status if video_stage else 'pending',
                 'videos': []
+            }
+            sb_data['image_edit'] = {
+                'template_enabled': stage_template_states.get('image_edit', True),
+                'status': image_edit_stage.status if image_edit_stage else 'pending',
+                'results': []
             }
 
             if not storyboard_id:
@@ -945,15 +961,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 input_data=input_data,
                 user_id=self.request.user.id,
             )
-        elif stage_name == "image_generation":
-            # 文生图阶段
-            storyboard_ids = input_data.get("storyboard_ids", None)
-            force_regenerate = input_data.get("force_regenerate", False)
-            task = execute_text2image_stage.delay(
-                project_id=str(project.id),
-                storyboard_ids=storyboard_ids,
-                force_regenerate=force_regenerate,
-                user_id=self.request.user.id,
+        elif stage_name in ["image_generation", "multi_grid_image", "image_edit"]:
+            return Response(
+                {"error": f"阶段 {stage_name} 暂未接入异步执行器"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         elif stage_name == "video_generation":
             # 图生视频阶段
@@ -1159,13 +1170,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         stage = get_object_or_404(ProjectStage, project=project, stage_type=stage_name)
 
         # 重置该阶段及后续阶段
-        stage_order = [
-            "rewrite",
-            "storyboard",
-            "image_generation",
-            "camera_movement",
-            "video_generation",
-        ]
+        stage_order = get_project_stage_order(get_stage_template_states(project))
         current_index = stage_order.index(stage_name)
 
         # 重置当前及后续阶段

@@ -8,8 +8,10 @@ PROJECT_STAGE_TYPES = [
     'rewrite',
     'storyboard',
     'image_generation',
+    'multi_grid_image',
     'camera_movement',
     'video_generation',
+    'image_edit',
 ]
 
 
@@ -21,6 +23,38 @@ def get_effective_prompt_template_set(project):
 
     return PromptTemplateSet.objects.filter(is_default=True).first()
 
+
+
+
+def normalize_stage_template_states(stage_states):
+    """标准化阶段启用状态，并处理 image_generation 与 multi_grid/image_edit 的互斥优先级。"""
+    normalized = {stage_type: bool(stage_states.get(stage_type, False)) for stage_type in PROJECT_STAGE_TYPES}
+
+    use_advanced_image_flow = normalized.get('multi_grid_image', False) or normalized.get('image_edit', False)
+    if use_advanced_image_flow:
+        normalized['image_generation'] = False
+
+    return normalized
+
+
+def get_project_stage_order(stage_states=None):
+    """根据阶段启用状态返回实际执行顺序。"""
+    normalized = normalize_stage_template_states(stage_states or {stage_type: True for stage_type in PROJECT_STAGE_TYPES})
+
+    stage_order = ['rewrite', 'storyboard']
+
+    if normalized.get('multi_grid_image'):
+        stage_order.append('multi_grid_image')
+    if normalized.get('image_edit'):
+        stage_order.append('image_edit')
+    if normalized.get('image_generation'):
+        stage_order.append('image_generation')
+    if normalized.get('camera_movement'):
+        stage_order.append('camera_movement')
+    if normalized.get('video_generation'):
+        stage_order.append('video_generation')
+
+    return stage_order
 
 def get_stage_template_states(project):
     """返回项目各阶段对应提示词模板是否启用。"""
@@ -37,10 +71,10 @@ def get_stage_template_states(project):
         ).values_list('stage_type', flat=True)
     )
 
-    return {
+    return normalize_stage_template_states({
         stage_type: stage_type in enabled_stage_types
         for stage_type in PROJECT_STAGE_TYPES
-    }
+    })
 
 
 def is_stage_template_enabled(project, stage_type: str) -> bool:

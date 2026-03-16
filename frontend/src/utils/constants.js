@@ -12,8 +12,10 @@ export const STAGE_TYPES = {
   REWRITE: 'rewrite',
   STORYBOARD: 'storyboard',
   IMAGE_GENERATION: 'image_generation',
+  MULTI_GRID_IMAGE: 'multi_grid_image',
   CAMERA_MOVEMENT: 'camera_movement',
   VIDEO_GENERATION: 'video_generation',
+  IMAGE_EDIT: 'image_edit',
 };
 
 // 阶段状态常量
@@ -30,6 +32,7 @@ export const PROVIDER_TYPES = {
   LLM: 'llm',
   TEXT2IMAGE: 'text2image',
   IMAGE2VIDEO: 'image2video',
+  IMAGE_EDIT: 'image_edit',
 };
 
 // 负载均衡策略

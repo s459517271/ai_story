@@ -137,8 +137,10 @@ class PromptTemplateSerializer(serializers.ModelSerializer):
                 'rewrite': 'llm',
                 'storyboard': 'llm',
                 'image_generation': 'text2image',
+                'multi_grid_image': 'text2image',
                 'camera_movement': 'llm',
                 'video_generation': 'image2video',
+                'image_edit': 'image_edit',
             }
 
             expected_type = stage_to_provider_type.get(stage_type)

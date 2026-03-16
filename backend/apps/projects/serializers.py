@@ -26,7 +26,7 @@ def get_latest_episode(series):
 
 
 def initialize_project_resources(project):
-    stage_types = ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']
+    stage_types = ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
     for stage_type in stage_types:
         ProjectStage.objects.create(
             project=project,
@@ -255,6 +255,9 @@ class ProjectStageSerializer(serializers.ModelSerializer):
                         ]
                     })
                 return {'storyboards': result}
+
+            elif stage_type in ('multi_grid_image', 'image_edit'):
+                return instance.output_data or {'storyboards': []}
 
             return instance.output_data or {}
         except Exception:
@@ -725,7 +728,7 @@ class StageRetrySerializer(serializers.Serializer):
     """阶段重试序列化器"""
 
     stage_name = serializers.ChoiceField(
-        choices=['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']
+        choices=['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
     )
 
     def validate_stage_name(self, value):
@@ -750,7 +753,7 @@ class StageExecuteSerializer(serializers.Serializer):
     """阶段执行序列化器"""
 
     stage_name = serializers.ChoiceField(
-        choices=['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']
+        choices=['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
     )
     input_data = serializers.JSONField(required=False, default=dict)
 

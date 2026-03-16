@@ -18,7 +18,7 @@ from apps.content.processors.text2image_stage import Text2ImageStageProcessor
 from apps.content.processors.image2video_stage import Image2VideoStageProcessor
 from apps.projects.models import Project, ProjectStage
 from apps.projects.queue_service import complete_episode_task_by_celery_id
-from apps.projects.utils import is_stage_template_enabled
+from apps.projects.utils import get_project_stage_order, get_stage_template_states, is_stage_template_enabled
 from config.celery_app import app
 
 logger = logging.getLogger(__name__)
@@ -848,21 +848,15 @@ def run_full_pipeline_task(
     publisher = RedisStreamPublisher(project_id, 'pipeline')
 
     # 定义阶段顺序
-    stage_order = [
-        'rewrite',
-        'storyboard',
-        'image_generation',
-        'camera_movement',
-        'video_generation'
-    ]
+    project = Project.objects.get(id=project_id, user_id=user_id)
+    stage_order = get_project_stage_order(get_stage_template_states(project))
 
     completed_stages = []
     skipped_stages = []
     queue_final_status = 'failed'
 
     try:
-        # 获取项目
-        project = Project.objects.get(id=project_id, user_id=user_id)
+        # 项目已提前获取并用于推导实际阶段顺序
 
         # 更新项目状态
         project.status = 'processing'
@@ -940,6 +934,9 @@ def run_full_pipeline_task(
                         storyboard_ids=None,  # 处理所有分镜
                         user_id=user_id
                     )
+
+                elif stage_name in ['multi_grid_image', 'image_edit']:
+                    raise Exception(f'阶段 {stage_name} 暂未接入完整流程执行器')
 
                 elif stage_name == 'video_generation':
                     # 图生视频阶段

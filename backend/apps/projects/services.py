@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from django.utils import timezone
 from django.db import transaction
 from .models import Project, ProjectStage
+from .utils import get_project_stage_order, get_stage_template_states
 
 
 class ProjectWorkflowService:
@@ -16,14 +17,21 @@ class ProjectWorkflowService:
     负责管理项目的工作流状态转换和阶段协调
     """
 
-    # 阶段执行顺序
+    # 默认阶段顺序（实际执行顺序以 get_project_stage_order 为准）
     STAGE_ORDER = [
         'rewrite',
         'storyboard',
+        'multi_grid_image',
+        'image_edit',
         'image_generation',
         'camera_movement',
         'video_generation'
     ]
+
+    @staticmethod
+    def get_effective_stage_order(project_id: str):
+        project = Project.objects.get(id=project_id)
+        return get_project_stage_order(get_stage_template_states(project))
 
     @staticmethod
     def get_stage_index(stage_type: str) -> int:
@@ -34,20 +42,32 @@ class ProjectWorkflowService:
             return -1
 
     @staticmethod
-    def get_next_stage(current_stage: str) -> Optional[str]:
+    def get_next_stage(current_stage: str, project_id: Optional[str] = None) -> Optional[str]:
         """获取下一个阶段"""
-        current_index = ProjectWorkflowService.get_stage_index(current_stage)
-        if current_index == -1 or current_index >= len(ProjectWorkflowService.STAGE_ORDER) - 1:
+        stage_order = ProjectWorkflowService.STAGE_ORDER
+        if project_id:
+            try:
+                stage_order = ProjectWorkflowService.get_effective_stage_order(project_id)
+            except Exception:
+                stage_order = ProjectWorkflowService.STAGE_ORDER
+        current_index = stage_order.index(current_stage) if current_stage in stage_order else -1
+        if current_index == -1 or current_index >= len(stage_order) - 1:
             return None
-        return ProjectWorkflowService.STAGE_ORDER[current_index + 1]
+        return stage_order[current_index + 1]
 
     @staticmethod
-    def get_previous_stage(current_stage: str) -> Optional[str]:
+    def get_previous_stage(current_stage: str, project_id: Optional[str] = None) -> Optional[str]:
         """获取上一个阶段"""
-        current_index = ProjectWorkflowService.get_stage_index(current_stage)
+        stage_order = ProjectWorkflowService.STAGE_ORDER
+        if project_id:
+            try:
+                stage_order = ProjectWorkflowService.get_effective_stage_order(project_id)
+            except Exception:
+                stage_order = ProjectWorkflowService.STAGE_ORDER
+        current_index = stage_order.index(current_stage) if current_stage in stage_order else -1
         if current_index <= 0:
             return None
-        return ProjectWorkflowService.STAGE_ORDER[current_index - 1]
+        return stage_order[current_index - 1]
 
     @staticmethod
     @transaction.atomic
@@ -130,7 +150,7 @@ class ProjectWorkflowService:
 
         # 检查是否所有阶段都完成
         project = Project.objects.get(id=project_id)
-        all_completed = project.stages.filter(status='completed').count() == len(ProjectWorkflowService.STAGE_ORDER)
+        all_completed = project.stages.filter(stage_type__in=ProjectWorkflowService.get_effective_stage_order(project_id), status='completed').count() == len(ProjectWorkflowService.get_effective_stage_order(project_id))
 
         result = {
             'stage': stage,
@@ -146,7 +166,7 @@ class ProjectWorkflowService:
             result['project_completed'] = True
         else:
             # 获取下一阶段
-            next_stage_type = ProjectWorkflowService.get_next_stage(stage_type)
+            next_stage_type = ProjectWorkflowService.get_next_stage(stage_type, project_id)
             if next_stage_type and auto_next:
                 # 自动开始下一阶段
                 next_stage = ProjectWorkflowService.start_stage(project_id, next_stage_type)
