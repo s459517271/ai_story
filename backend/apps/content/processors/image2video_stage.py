@@ -429,15 +429,19 @@ class Image2VideoStageProcessor(StageProcessor):
             camera_movement_description = self._build_camera_movement_description(project, scene_number)
 
             client = create_ai_client(provider)
-            video_urls = client._generate_video(
-                api_url=api_url,
-                session_id=api_key,
-                model=model_name,
-                prompt=prompt,
-                image_uri=image_url,
-                image_base64=image_base64,
-                camera_movement_description=camera_movement_description,
-            )
+            generate_kwargs = {
+                'api_url': api_url,
+                'session_id': api_key,
+                'model': model_name,
+                'prompt': prompt,
+                'camera_movement_description': camera_movement_description,
+            }
+            if image_base64:
+                generate_kwargs['image_base64'] = image_base64
+            elif image_url:
+                generate_kwargs['image_uri'] = image_url
+
+            video_urls = client._generate_video(**generate_kwargs)
 
             yield {
                 "type": "video_generated",

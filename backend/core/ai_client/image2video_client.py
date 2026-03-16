@@ -5,13 +5,19 @@
 支持视频生成任务提交和轮询查询
 """
 
+import base64
+from pathlib import Path
 import re
 import time
+import uuid
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 
 import requests
+from django.conf import settings
+
+from core.utils.file_storage import video_storage
 
 
 class TaskStatus(Enum):
@@ -43,21 +49,14 @@ class VideoGeneratorClient:
         model_name: Optional[str] = None,
         **kwargs,
     ):
-        """初始化视频生成客户端
-
-        Args:
-            api_url: API地址或基础地址
-            api_token: API认证令牌
-            model: 模型名称
-            api_key: 兼容旧参数名
-            model_name: 兼容旧参数名
-        """
+        """初始化视频生成客户端。"""
         resolved_api_token = api_token or api_key or ''
         resolved_model = model or model_name or ''
 
         self.api_token = resolved_api_token
         self.base_url = api_url
         self.model = resolved_model
+        self.timeout = kwargs.get('timeout', 60)
         self.headers = {
             'Authorization': f'Bearer {resolved_api_token}',
             'Content-Type': 'application/json',
@@ -105,6 +104,117 @@ class VideoGeneratorClient:
                 fallback_urls.append(cleaned)
         return list(dict.fromkeys(fallback_urls))
 
+    def _build_storage_url(self, relative_path: str) -> str:
+        """构建本地视频访问地址。"""
+        return f'/api/v1/content/storage/video/{relative_path}'
+
+    def _read_storage_image_as_base64(self, image_url: str) -> str:
+        """读取本地 storage/image 下的图片并转换为 base64。"""
+        relative_path = image_url.split('/api/v1/content/storage/image/', 1)[1]
+        image_path = Path(settings.STORAGE_ROOT) / 'image' / relative_path
+        image_bytes = image_path.read_bytes()
+        return base64.b64encode(image_bytes).decode('utf-8')
+
+    def _read_image_url_as_base64(self, image_url: str, timeout: int) -> str:
+        """读取图片URL并转换为 base64 字符串。"""
+        response = requests.get(image_url, timeout=timeout)
+        response.raise_for_status()
+        return base64.b64encode(response.content).decode('utf-8')
+
+    def _resolve_image_base64(
+        self,
+        image_uri: Optional[str],
+        image_base64: Optional[str],
+        timeout: int,
+    ) -> str:
+        """统一解析图生视频输入图片为 base64。"""
+        if image_base64:
+            return image_base64
+
+        image_url = image_uri.get('url') if isinstance(image_uri, dict) else image_uri
+        if not image_url:
+            return ''
+
+        if image_url.startswith('data:') and ';base64,' in image_url:
+            return image_url.split(';base64,', 1)[1]
+        if image_url.startswith('/api/v1/content/storage/image/'):
+            return self._read_storage_image_as_base64(image_url)
+
+        return self._read_image_url_as_base64(image_url, timeout)
+
+    def _get_video_extension(self, content_type: str = '', source_url: str = '') -> str:
+        """根据响应头或URL推断视频扩展名。"""
+        type_map = {
+            'video/mp4': '.mp4',
+            'video/quicktime': '.mov',
+            'video/webm': '.webm',
+            'video/x-msvideo': '.avi',
+            'video/x-matroska': '.mkv',
+        }
+        normalized_type = (content_type or '').split(';', 1)[0].strip().lower()
+        if normalized_type in type_map:
+            return type_map[normalized_type]
+
+        path = urlparse(source_url).path.lower()
+        for extension in ('.mp4', '.mov', '.webm', '.avi', '.mkv', '.flv'):
+            if path.endswith(extension):
+                return extension
+
+        return '.mp4'
+
+    def _download_video_to_storage(self, video_url: str, timeout: int) -> dict:
+        """下载远程视频到本地存储并返回本地访问地址。"""
+        if video_url.startswith('/api/v1/content/storage/video/'):
+            relative_path = video_url.split('/api/v1/content/storage/video/', 1)[1]
+            return {
+                'url': video_url,
+                'storage_path': relative_path,
+                'original_url': video_url,
+            }
+
+        response = requests.get(video_url, stream=True, timeout=timeout)
+        response.raise_for_status()
+        extension = self._get_video_extension(
+            content_type=response.headers.get('Content-Type', ''),
+            source_url=video_url,
+        )
+        filename = f'video_{uuid.uuid4().hex}{extension}'
+        full_path, relative_path = video_storage.get_unique_filepath(
+            filename=filename,
+            create_dirs=True,
+        )
+
+        with open(full_path, 'wb') as output_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    output_file.write(chunk)
+
+        return {
+            'url': self._build_storage_url(relative_path),
+            'storage_path': relative_path,
+            'original_url': video_url,
+        }
+
+    def _localize_video_item(self, item: Any, timeout: int) -> dict:
+        """将单个视频结果下载到本地。"""
+        original_item = item if isinstance(item, dict) else {'url': item}
+        video_url = original_item.get('url', '')
+        localized = dict(original_item)
+
+        if not video_url:
+            return localized
+
+        try:
+            localized.update(self._download_video_to_storage(video_url, timeout))
+        except Exception as exc:
+            localized['download_error'] = str(exc)
+            localized.setdefault('original_url', video_url)
+        return localized
+
+    def _localize_video_data(self, video_data: List[dict], timeout: int) -> List[dict]:
+        """批量将视频结果下载到本地。"""
+        return [self._localize_video_item(item, timeout) for item in video_data]
+
     def _build_prompt_text(
         self,
         prompt: str,
@@ -141,6 +251,8 @@ class VideoGeneratorClient:
     ) -> Any:
         """创建视频生成任务。"""
         url = self._build_create_video_url()
+        timeout = kwargs.get('timeout', self.timeout)
+        resolved_image_base64 = self._resolve_image_base64(image_uri, image_base64, timeout)
         final_prompt = self._build_prompt_text(
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -155,9 +267,9 @@ class VideoGeneratorClient:
                 }
             ]
 
-            image_url = image_uri.get('url') if isinstance(image_uri, dict) else image_uri
-            if not image_url and image_base64:
-                image_url = f'data:{image_mime_type};base64,{image_base64}'
+            image_url = ''
+            if resolved_image_base64:
+                image_url = f'data:{image_mime_type};base64,{resolved_image_base64}'
 
             if image_url:
                 message_content.append(
@@ -197,43 +309,15 @@ class VideoGeneratorClient:
             except requests.exceptions.RequestException as e:
                 raise Exception(f'创建视频任务失败: {str(e)}')
 
-        instance = {'prompt': final_prompt}
-
-        if image_uri or image_base64:
-            image_data = {'mimeType': image_mime_type}
-            if image_uri:
-                image_data['uri'] = image_uri.get('url', image_uri) if isinstance(image_uri, dict) else image_uri
-            if image_base64:
-                image_data['bytesBase64Encoded'] = image_base64
-            instance['image'] = image_data
-
-        parameters = {
-            'durationSeconds': duration_seconds,
-            'sampleCount': sample_count,
-            'aspectRatio': aspect_ratio,
-            'personGeneration': person_generation,
-        }
-
-        if generate_audio and model != 'veo-2.0-generate-001':
-            parameters['generateAudio'] = generate_audio
-        if resolution:
-            parameters['resolution'] = resolution
-        if seed is not None:
-            parameters['seed'] = seed
-        if negative_prompt:
-            parameters['negativePrompt'] = negative_prompt
-
-        file_path = image_uri.get('url') if isinstance(image_uri, dict) else image_uri
-
         payload = {
             'width': 720,
             'height': 1280,
             'model': model,
             'prompt': final_prompt,
-            'filePaths': [file_path] if file_path else [],
+            'filePaths': [],
         }
-        if image_base64:
-            payload['imageBase64'] = image_base64
+        if resolved_image_base64:
+            payload['imageBase64'] = resolved_image_base64
         if camera_movement_description:
             payload['cameraMovementDescription'] = camera_movement_description
         if resolution:
@@ -242,12 +326,21 @@ class VideoGeneratorClient:
             payload['durationSeconds'] = duration_seconds
         if aspect_ratio:
             payload['aspectRatio'] = aspect_ratio
+        if sample_count:
+            payload['sampleCount'] = sample_count
+        if seed is not None:
+            payload['seed'] = seed
+        if negative_prompt:
+            payload['negativePrompt'] = negative_prompt
+        if generate_audio and model != 'veo-2.0-generate-001':
+            payload['generateAudio'] = generate_audio
+        if person_generation:
+            payload['personGeneration'] = person_generation
 
         try:
             response = requests.post(url, json=payload, headers=self.headers)
             response.raise_for_status()
             result = response.json()
-            print(result)
             data = result.get('data')
             if isinstance(data, list):
                 return data
@@ -307,6 +400,7 @@ class VideoGeneratorClient:
     ) -> Dict[str, Any]:
         """同步生成视频(提交任务并等待完成)。"""
         start_time = time.time()
+        timeout = kwargs.get('timeout', self.timeout)
         task_result = self.create_video_task(prompt, **kwargs)
 
         if isinstance(task_result, list):
@@ -317,15 +411,13 @@ class VideoGeneratorClient:
                     if not url:
                         continue
                     video_data.append(item)
-                    continue
-
-                if item:
+                elif item:
                     video_data.append({'url': item})
 
-            print(f'✓ 视频生成完成! 共 {len(video_data)} 个视频')
+            localized_video_data = self._localize_video_data(video_data, timeout)
             return {
                 'success': True,
-                'data': video_data,
+                'data': localized_video_data,
                 'metadata': {
                     'latency_ms': int((time.time() - start_time) * 1000),
                     'model': kwargs.get('model') or self.model,
@@ -337,18 +429,11 @@ class VideoGeneratorClient:
         if isinstance(task_result, dict):
             task_id = task_result.get('task_id') or task_result.get('id')
 
-        print(f'✓ 任务已创建: {task_id}')
-
-        def status_callback(task_info):
-            status = task_info.get('status')
-            message = task_info.get('message', '')
-            print(f'  状态: {status} {message}')
-
         result = self.wait_for_completion(
             task_id,
             poll_interval=poll_interval,
             max_wait_time=max_wait_time,
-            callback=status_callback,
+            callback=None,
         )
 
         videos = result.get('data', {}).get('videos', [])
@@ -362,10 +447,10 @@ class VideoGeneratorClient:
             else:
                 video_data.append({'url': url})
 
-        print(f'✓ 视频生成完成! 共 {len(video_data)} 个视频')
+        localized_video_data = self._localize_video_data(video_data, timeout)
         return {
             'success': True,
-            'data': video_data,
+            'data': localized_video_data,
             'metadata': {
                 'latency_ms': int((time.time() - start_time) * 1000),
                 'model': kwargs.get('model') or self.model,

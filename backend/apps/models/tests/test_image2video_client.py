@@ -89,3 +89,41 @@ class VideoGeneratorClientTestCase(SimpleTestCase):
             mock_post.call_args.kwargs['json']['cameraMovementDescription'],
             '镜头轻微右移',
         )
+
+
+    @patch('core.ai_client.image2video_client.VideoGeneratorClient._localize_video_data', side_effect=lambda data, timeout: data)
+    @patch('core.ai_client.image2video_client.Path.read_bytes', return_value=b'local-image-bytes')
+    @patch('core.ai_client.image2video_client.requests.post')
+    def test_chat_completions_endpoint_reads_storage_image_as_base64(self, mock_post, mock_read_bytes, mock_localize):
+        post_response = Mock()
+        post_response.raise_for_status.return_value = None
+        post_response.json.return_value = {
+            'choices': [
+                {
+                    'message': {
+                        'content': '<video src="https://example.com/generated.mp4" controls="controls"></video>'
+                    }
+                }
+            ]
+        }
+        mock_post.return_value = post_response
+
+        client = VideoGeneratorClient(
+            api_url='https://freeapi.example.com/v1/chat/completions',
+            api_token='secret',
+            model='grok-imagine-1.0-video',
+        )
+
+        result = client._generate_video(
+            prompt='狗狗动起来',
+            image_uri='/api/v1/content/storage/image/2026-03-16/image_da512287fb1d4e50912886a1cdd0324e.jpg',
+            model='grok-imagine-1.0-video',
+        )
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['data'], [{'url': 'https://example.com/generated.mp4'}])
+        mock_read_bytes.assert_called_once()
+        self.assertEqual(
+            mock_post.call_args.kwargs['json']['messages'][0]['content'][1]['image_url']['url'],
+            'data:image/jpeg;base64,bG9jYWwtaW1hZ2UtYnl0ZXM=',
+        )

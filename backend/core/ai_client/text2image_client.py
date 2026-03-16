@@ -3,12 +3,16 @@
 支持 OpenAI 兼容的 chat/completions 图像生成接口
 """
 
+import base64
 import re
 import time
+import uuid
 from typing import List
 from urllib.parse import urlparse
 
 import requests
+
+from core.utils.file_storage import image_storage
 
 from .base import Text2ImageClient as BaseText2ImageClient, AIResponse
 
@@ -42,6 +46,113 @@ class Text2ImageClient(BaseText2ImageClient):
             if cleaned:
                 fallback_urls.append(cleaned)
         return fallback_urls
+
+    def _build_storage_url(self, relative_path: str) -> str:
+        """构建本地存储访问地址。"""
+        return f'/api/v1/content/storage/image/{relative_path}'
+
+    def _get_image_extension(self, content_type: str = '', source_url: str = '', content: bytes = b'') -> str:
+        """根据响应头、URL或二进制内容推断图片扩展名。"""
+        type_map = {
+            'image/jpeg': '.jpg',
+            'image/jpg': '.jpg',
+            'image/png': '.png',
+            'image/gif': '.gif',
+            'image/webp': '.webp',
+            'image/bmp': '.bmp',
+            'image/svg+xml': '.svg',
+        }
+        normalized_type = (content_type or '').split(';', 1)[0].strip().lower()
+        if normalized_type in type_map:
+            return type_map[normalized_type]
+
+        path = urlparse(source_url).path.lower()
+        for extension in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'):
+            if path.endswith(extension):
+                return '.jpg' if extension == '.jpeg' else extension
+
+        if content.startswith(b'\xFF\xD8\xFF'):
+            return '.jpg'
+        if content.startswith(b'\x89PNG\r\n\x1a\n'):
+            return '.png'
+        if content.startswith((b'GIF87a', b'GIF89a')):
+            return '.gif'
+        if content.startswith(b'RIFF') and b'WEBP' in content[:16]:
+            return '.webp'
+        if content.startswith(b'BM'):
+            return '.bmp'
+        if content.lstrip().startswith(b'<svg'):
+            return '.svg'
+
+        return '.png'
+
+    def _download_image_to_storage(self, image_url: str, timeout: int) -> dict:
+        """下载远程图片到本地存储并返回本地访问地址。"""
+        if image_url.startswith('/api/v1/content/storage/image/'):
+            relative_path = image_url.split('/api/v1/content/storage/image/', 1)[1]
+            return {
+                'url': image_url,
+                'storage_path': relative_path,
+                'original_url': image_url,
+            }
+
+        response = requests.get(image_url, timeout=timeout)
+        response.raise_for_status()
+        image_content = response.content
+
+        extension = self._get_image_extension(
+            content_type=response.headers.get('Content-Type', ''),
+            source_url=image_url,
+            content=image_content,
+        )
+        filename = f'image_{uuid.uuid4().hex}{extension}'
+        _, relative_path = image_storage.save_file(filename=filename, content=image_content)
+
+        return {
+            'url': self._build_storage_url(relative_path),
+            'storage_path': relative_path,
+            'original_url': image_url,
+        }
+
+    def _save_b64_image_to_storage(self, b64_json: str) -> dict:
+        """将 base64 图片保存到本地存储。"""
+        image_content = base64.b64decode(b64_json)
+        extension = self._get_image_extension(content=image_content)
+        filename = f'image_{uuid.uuid4().hex}{extension}'
+        _, relative_path = image_storage.save_file(filename=filename, content=image_content)
+
+        return {
+            'url': self._build_storage_url(relative_path),
+            'storage_path': relative_path,
+            'original_url': '',
+        }
+
+    def _localize_image_item(self, item: dict, width: int, height: int, timeout: int) -> dict:
+        """将单个图片结果落盘到本地。"""
+        image_url = item.get('url', '')
+        b64_json = item.get('b64_json', '')
+        localized = {
+            'width': item.get('width', width),
+            'height': item.get('height', height),
+        }
+
+        try:
+            if image_url:
+                localized.update(self._download_image_to_storage(image_url, timeout))
+                return localized
+            if b64_json:
+                localized.update(self._save_b64_image_to_storage(b64_json))
+                return localized
+        except Exception as exc:
+            if image_url:
+                localized['url'] = image_url
+                localized['original_url'] = image_url
+                localized['download_error'] = str(exc)
+                return localized
+            localized['download_error'] = str(exc)
+            return localized
+
+        return localized
 
     def _generate_image(
         self,
@@ -82,7 +193,7 @@ class Text2ImageClient(BaseText2ImageClient):
             payload = {
                 'model': model_name,
                 'prompt': content,
-                'size': size
+                'size': size,
             }
         else:
             payload = {
@@ -128,24 +239,12 @@ class Text2ImageClient(BaseText2ImageClient):
                 images_data = []
                 image_urls = []
                 for item in result_data:
-                    image_url = item.get('url', '')
-                    b64_json = item.get('b64_json', '')
-
-                    if not image_url and not b64_json:
+                    if not item.get('url') and not item.get('b64_json'):
                         continue
 
-                    if image_url:
-                        image_urls.append(image_url)
-
-                    image_item = {
-                        'width': width,
-                        'height': height,
-                    }
-                    if image_url:
-                        image_item['url'] = image_url
-                    if b64_json:
-                        image_item['b64_json'] = b64_json
-
+                    image_item = self._localize_image_item(item, width, height, timeout)
+                    if image_item.get('url'):
+                        image_urls.append(image_item['url'])
                     images_data.append(image_item)
 
                 if not images_data:
@@ -204,14 +303,10 @@ class Text2ImageClient(BaseText2ImageClient):
                     }
                 )
 
-            images_data = [
-                {
-                    'url': image_url,
-                    'width': width,
-                    'height': height,
-                }
-                for image_url in image_urls
-            ]
+            images_data = []
+            for image_url in image_urls:
+                image_item = self._localize_image_item({'url': image_url}, width, height, timeout)
+                images_data.append(image_item)
 
             return AIResponse(
                 success=True,

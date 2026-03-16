@@ -192,3 +192,4 @@ AI分析每个场景，自动生成合适的镜头运动方案。
 
 
 uv run celery -A config worker -l info -P gevent
+
