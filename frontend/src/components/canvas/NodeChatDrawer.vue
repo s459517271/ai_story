@@ -27,18 +27,33 @@
           </button>
         </div>
 
-        <div class="node-summary card-shell">
-          <div class="card-top compact-card-top">
+        <div
+          class="node-summary card-shell"
+          :class="{ collapsed: !summaryExpanded }"
+        >
+          <button
+            class="summary-toggle compact-card-top"
+            type="button"
+            @click="summaryExpanded = !summaryExpanded"
+          >
             <div>
               <div class="card-title summary-title">
                 当前内容
               </div>
               <div class="card-desc summary-desc">
-                AI 会基于这个节点做多轮微调
+                默认收起，按需展开查看完整上下文
               </div>
             </div>
-          </div>
-          <pre class="summary-content">{{ summary }}</pre>
+            <span
+              class="summary-toggle-text"
+            >
+              {{ summaryExpanded ? '收起' : '展开' }}
+            </span>
+          </button>
+          <pre
+            v-show="summaryExpanded"
+            class="summary-content"
+          >{{ summary }}</pre>
         </div>
 
         <div class="quick-actions">
@@ -61,7 +76,9 @@
             v-if="messages.length === 0"
             class="empty-chat"
           >
-            <div class="empty-hero">
+            <div
+              class="empty-hero"
+            >
               开始一次节点对话
             </div>
             <p class="empty-hint">
@@ -112,9 +129,10 @@
 
         <div class="composer card-shell">
           <textarea
+            ref="composerInput"
             :value="value"
             class="composer-input"
-            rows="4"
+            rows="3"
             placeholder="例如：保留原意，但让画面更电影感，旁白更精炼。"
             @input="$emit('input', $event.target.value)"
             @keydown.meta.enter.prevent="$emit('submit')"
@@ -190,6 +208,11 @@ export default {
       default: false,
     },
   },
+  data() {
+    return {
+      summaryExpanded: false,
+    };
+  },
   watch: {
     messages: {
       deep: true,
@@ -204,6 +227,7 @@ export default {
     },
     visible(isVisible) {
       if (isVisible) {
+        this.summaryExpanded = false;
         this.$nextTick(() => {
           const list = this.$refs.messageList;
           if (list) {
@@ -211,6 +235,19 @@ export default {
           }
         });
       }
+    },
+  },
+  methods: {
+    focusInputToEnd() {
+      this.$nextTick(() => {
+        const textarea = this.$refs.composerInput;
+        if (!textarea) {
+          return;
+        }
+        textarea.focus();
+        const length = textarea.value ? textarea.value.length : 0;
+        textarea.setSelectionRange(length, length);
+      });
     },
   },
 };
@@ -231,8 +268,8 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  padding: 1rem;
+  gap: 0.65rem;
+  padding: 0.8rem;
   border-left: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(248, 250, 252, 0.95);
   backdrop-filter: blur(16px);
@@ -264,7 +301,7 @@ export default {
 }
 
 .drawer-eyebrow {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -272,8 +309,8 @@ export default {
 }
 
 .drawer-title {
-  margin: 0.2rem 0 0;
-  font-size: 1.15rem;
+  margin: 0.15rem 0 0;
+  font-size: 1.06rem;
   font-weight: 700;
   color: #0f172a;
 }
@@ -283,19 +320,19 @@ export default {
 }
 
 .drawer-subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.84rem;
+  margin: 0.12rem 0 0;
+  font-size: 0.8rem;
   color: #64748b;
 }
 
 .drawer-close {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
   color: #0f172a;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   line-height: 1;
 }
 
@@ -305,42 +342,60 @@ export default {
 }
 
 .card-shell {
-  border-radius: 18px;
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .layout-shell.theme-dark .card-shell {
   background: rgba(15, 23, 42, 0.84);
   border-color: rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
 }
 
 .node-summary,
 .composer {
-  padding: 0.9rem 1rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.node-summary.collapsed {
+  padding-bottom: 0.45rem;
+}
+
+.summary-toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .summary-title {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
 }
 
 .summary-desc,
 .composer-tip,
-.message-status {
-  font-size: 0.75rem;
+.message-status,
+.summary-toggle-text {
+  font-size: 0.72rem;
   color: #64748b;
 }
 
+.summary-toggle-text {
+  font-weight: 600;
+}
+
 .summary-content {
-  margin: 0.65rem 0 0;
-  max-height: 150px;
+  margin: 0.45rem 0 0;
+  max-height: 120px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 0.78rem;
-  line-height: 1.65;
+  font-size: 0.74rem;
+  line-height: 1.55;
   color: #334155;
 }
 
@@ -350,17 +405,17 @@ export default {
 
 .quick-actions {
   flex-wrap: wrap;
-  gap: 0.55rem;
+  gap: 0.45rem;
 }
 
 .quick-action-btn,
 .apply-action {
-  padding: 0.48rem 0.8rem;
+  padding: 0.4rem 0.7rem;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: rgba(255, 255, 255, 0.96);
   color: #0f172a;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   transition: all 0.2s ease;
 }
@@ -385,13 +440,13 @@ export default {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding-right: 0.15rem;
+  gap: 0.55rem;
+  padding-right: 0.1rem;
 }
 
 .empty-chat {
-  padding: 1.25rem 1rem;
-  border-radius: 18px;
+  padding: 0.9rem 0.75rem;
+  border-radius: 16px;
   border: 1px dashed rgba(148, 163, 184, 0.3);
   background: rgba(255, 255, 255, 0.5);
   text-align: center;
@@ -403,10 +458,10 @@ export default {
 
 .message-card {
   max-width: 92%;
-  padding: 0.85rem 1rem;
-  border-radius: 18px;
+  padding: 0.55rem 0.7rem;
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.12);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
 }
 
 .message-card.role-user {
@@ -428,7 +483,7 @@ export default {
 }
 
 .message-role {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #0f766e;
 }
@@ -438,11 +493,11 @@ export default {
 }
 
 .message-content {
-  margin-top: 0.5rem;
+  margin-top: 0.28rem;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  font-size: 0.84rem;
+  line-height: 1.55;
   color: #1e293b;
 }
 
@@ -451,23 +506,24 @@ export default {
 }
 
 .message-footer {
-  margin-top: 0.7rem;
+  margin-top: 0.45rem;
 }
 
 .composer {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .composer-input {
   width: 100%;
+  min-height: 88px;
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.94);
-  padding: 0.9rem 1rem;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
   color: #0f172a;
   resize: vertical;
 }
@@ -487,14 +543,14 @@ export default {
 .composer-actions {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
 .primary-action,
 .secondary-action {
-  padding: 0.58rem 1rem;
+  padding: 0.48rem 0.9rem;
   border-radius: 999px;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
@@ -553,7 +609,7 @@ export default {
   }
 
   .drawer-panel {
-    padding: 0.85rem;
+    padding: 0.7rem;
   }
 
   .message-card {

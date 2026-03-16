@@ -439,6 +439,7 @@
     </div>
 
     <node-chat-drawer
+      ref="nodeChatDrawer"
       :visible="nodeChat.visible"
       :title="nodeChatTitle"
       :subtitle="nodeChatSubtitle"
@@ -1087,7 +1088,9 @@ export default {
     },
     applyNodeQuickAction(value) {
       this.nodeChat.input = value;
-      this.submitNodeChat();
+      this.$nextTick(() => {
+        this.$refs.nodeChatDrawer?.focusInputToEnd?.();
+      });
     },
     stopNodeChat() {
       if (this.nodeChat.abortController) {
