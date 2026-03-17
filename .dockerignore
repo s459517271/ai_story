@@ -33,5 +33,6 @@ django.log
 /backend/storage/image/
 .git
 .env
-/frontend/
+frontend/node_modules/
+frontend/dist/
 *.png
