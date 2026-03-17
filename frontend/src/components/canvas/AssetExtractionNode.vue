@@ -281,12 +281,15 @@ export default {
 <style scoped>
 .asset-extraction-node {
   width: 620px;
-  min-height: 320px;
+  height: 420px;
+  max-height: 420px;
   border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(255, 255, 255, 0.86);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
@@ -399,8 +402,9 @@ export default {
 }
 
 .card-body {
+  flex: 1;
+  min-height: 0;
   padding: 0 18px 18px;
-  max-height: 360px;
   overflow: auto;
 }
 

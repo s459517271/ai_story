@@ -13,6 +13,16 @@ const getSavedSidebarState = () => {
   }
 };
 
+// 从localStorage获取保存的头部栏状态
+const getSavedTopbarState = () => {
+  try {
+    const saved = localStorage.getItem('topbar_collapsed');
+    return saved === 'true';
+  } catch (error) {
+    return false;
+  }
+};
+
 // 从localStorage获取保存的主题
 const getSavedTheme = () => {
   try {
@@ -26,6 +36,8 @@ const getSavedTheme = () => {
 const state = {
   // 侧边栏是否折叠
   sidebarCollapsed: getSavedSidebarState(),
+  // 头部栏是否折叠
+  topbarCollapsed: getSavedTopbarState(),
   // 主题(light | dark)
   theme: getSavedTheme(),
 };
@@ -58,6 +70,30 @@ const mutations = {
   },
 
   /**
+   * 切换头部栏折叠状态
+   */
+  TOGGLE_TOPBAR(state) {
+    state.topbarCollapsed = !state.topbarCollapsed;
+    try {
+      localStorage.setItem('topbar_collapsed', state.topbarCollapsed.toString());
+    } catch (error) {
+      console.error('保存头部栏状态失败:', error);
+    }
+  },
+
+  /**
+   * 设置头部栏折叠状态
+   */
+  SET_TOPBAR_COLLAPSED(state, collapsed) {
+    state.topbarCollapsed = collapsed;
+    try {
+      localStorage.setItem('topbar_collapsed', collapsed.toString());
+    } catch (error) {
+      console.error('保存头部栏状态失败:', error);
+    }
+  },
+
+  /**
    * 设置主题
    */
   SET_THEME(state, theme) {
@@ -86,6 +122,20 @@ const actions = {
   },
 
   /**
+   * 切换头部栏折叠状态
+   */
+  toggleTopbar({ commit }) {
+    commit('TOGGLE_TOPBAR');
+  },
+
+  /**
+   * 设置头部栏折叠状态
+   */
+  setTopbarCollapsed({ commit }, collapsed) {
+    commit('SET_TOPBAR_COLLAPSED', collapsed);
+  },
+
+  /**
    * 切换主题
    */
   toggleTheme({ commit, state }) {
@@ -106,6 +156,10 @@ const getters = {
    * 获取侧边栏折叠状态
    */
   sidebarCollapsed: (state) => state.sidebarCollapsed,
+  /**
+   * 获取头部栏折叠状态
+   */
+  topbarCollapsed: (state) => state.topbarCollapsed,
   /**
    * 获取主题
    */

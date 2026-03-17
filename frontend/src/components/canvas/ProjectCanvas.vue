@@ -327,6 +327,7 @@
       >
         <!-- 文案改写节点 -->
         <rewrite-node-expanded
+          ref="rewriteNode"
           v-if="project"
           :status="rewriteStage ? rewriteStage.status : 'pending'"
           :position="nodePositions.rewrite"
@@ -342,6 +343,7 @@
         />
 
         <asset-extraction-node
+          ref="assetExtractionNode"
           v-if="showAssetExtractionNode"
           :status="assetExtractionStage ? assetExtractionStage.status : 'pending'"
           :position="nodePositions.assetExtraction"
@@ -359,6 +361,7 @@
           <storyboard-node
             v-if="showStoryboardNode"
             :key="`storyboard-${index}`"
+            :ref="`storyboardNode-${index}`"
             :storyboard="storyboard"
             :index="index"
             :position="calculateStoryboardPosition(index)"
@@ -373,6 +376,7 @@
           <image-gen-node
             v-if="showImageNode(storyboard)"
             :key="`image-${index}`"
+            :ref="`imageNode-${index}`"
             :status="getImageStatus(storyboard)"
             :position="calculateImagePosition(index)"
             :image-url="getImageUrl(storyboard)"
@@ -390,6 +394,7 @@
           <multi-grid-image-node
             v-if="showMultiGridNode(storyboard)"
             :key="`multi-grid-${index}`"
+            :ref="`multiGridNode-${index}`"
             :status="getMultiGridStatus(storyboard)"
             :position="calculateMultiGridPosition(index)"
             :source-image-url="getMultiGridSourceUrl(storyboard)"
@@ -406,6 +411,7 @@
           <image-edit-node
             v-if="showImageEditNode(storyboard)"
             :key="`image-edit-${index}`"
+            :ref="`imageEditNode-${index}`"
             :status="getImageEditStatus(storyboard)"
             :position="calculateImageEditPosition(index)"
             :results="getImageEditResults(storyboard)"
@@ -422,6 +428,7 @@
           <camera-node
             v-if="showCameraNode(storyboard)"
             :key="`camera-${index}`"
+            :ref="`cameraNode-${index}`"
             :status="getCameraStatus(storyboard)"
             :position="calculateCameraPosition(index)"
             :movement-type="getCameraMovementType(storyboard)"
@@ -440,6 +447,7 @@
           <video-gen-node
             v-if="showVideoNode(storyboard)"
             :key="`video-${index}`"
+            :ref="`videoNode-${index}`"
             :status="getVideoStatus(storyboard)"
             :position="calculateVideoPosition(index)"
             :video-url="getVideoUrl(storyboard)"
@@ -593,6 +601,10 @@ export default {
       availableAssets: [],
       selectedAssetIds: [],
       runtimeMediaDimensions: {},
+      measuredNodeHeights: {},
+      pendingMeasuredHeights: {},
+      nodeResizeObserver: null,
+      resizeFlushFrame: null,
       showEpisodeMenu: false,
       switchingEpisodeId: null,
       episodeSearch: '',
@@ -669,19 +681,21 @@ export default {
     nodePositions() {
       return {
         rewrite: {
-          x: this.treeLayout.rewriteX,
-          y: this.treeLayout.rowY.rewrite || this.nodeMetrics.startY
+          x: this.gridLayout.rewriteSlot.x,
+          y: this.gridLayout.rowY.rewrite || this.nodeMetrics.startY,
+          height: this.getGridAllocatedHeight('rewrite', this.nodeMetrics.rewrite.height)
         },
         assetExtraction: {
-          x: this.treeLayout.assetExtractionX,
-          y: this.treeLayout.rowY.assetExtraction || this.nodeMetrics.startY
+          x: this.gridLayout.assetExtractionSlot.x,
+          y: this.gridLayout.rowY.assetExtraction || this.nodeMetrics.startY,
+          height: this.getGridAllocatedHeight('assetExtraction', this.nodeMetrics.assetExtraction.height)
         }
       };
     },
     nodeMetrics() {
       return {
-        rewrite: { width: 620, height: 300 },
-        assetExtraction: { width: 620, height: 320 },
+        rewrite: { width: 620, height: 420 },
+        assetExtraction: { width: 620, height: 420 },
         storyboard: { width: 280, height: 250 },
         media: { width: 250, headerHeight: 50, minPreviewHeight: 140 },
         multiGrid: { width: 250, headerHeight: 58, minPreviewHeight: 120, minTilesHeight: 110 },
@@ -690,11 +704,12 @@ export default {
         startX: 80,
         startY: 60,
         columnGap: 60,
-        rowGap: 90,
-        rewriteRowGap: 60
+        rowUnitHeight: 100,
+        rowGap: 24,
+        rewriteRowGap: 24
       };
     },
-    treeLayout() {
+    gridMetrics() {
       const branchWidth = Math.max(
         this.nodeMetrics.storyboard.width,
         this.nodeMetrics.media.width,
@@ -702,26 +717,55 @@ export default {
         this.nodeMetrics.imageEdit.width,
         this.nodeMetrics.camera.width
       );
-      const columnCount = Math.max(this.storyboards.length, 1);
-      const totalWidth = columnCount * branchWidth + (columnCount - 1) * this.nodeMetrics.columnGap;
+      const branchColumnCount = Math.max(this.storyboards.length, 1);
+      const totalBranchWidth = branchColumnCount * branchWidth + (branchColumnCount - 1) * this.nodeMetrics.columnGap;
+      const totalWidth = Math.max(
+        totalBranchWidth,
+        this.nodeMetrics.rewrite.width,
+        this.nodeMetrics.assetExtraction.width
+      );
+
+      return {
+        branchWidth,
+        branchColumnCount,
+        totalBranchWidth,
+        totalWidth,
+        startX: this.nodeMetrics.startX + ((totalWidth - totalBranchWidth) / 2),
+        startY: this.nodeMetrics.startY,
+        columnGap: this.nodeMetrics.columnGap,
+        rowUnitHeight: this.nodeMetrics.rowUnitHeight,
+        rowGap: this.nodeMetrics.rowGap,
+      };
+    },
+    gridLayout() {
       const rowY = {};
-      let currentY = this.nodeMetrics.startY;
+      const rowSpans = {};
+      const rowStep = this.gridMetrics.rowUnitHeight + this.gridMetrics.rowGap;
+      let currentRow = 0;
+
+      const getRowSpan = (height) => Math.max(
+        1,
+        Math.ceil((height + this.gridMetrics.rowGap) / rowStep)
+      );
 
       const stageRows = [
         {
           key: 'rewrite',
           visible: true,
-          height: this.nodeMetrics.rewrite.height,
+          height: this.getMeasuredHeight('rewrite', this.nodeMetrics.rewrite.height),
         },
         {
           key: 'assetExtraction',
           visible: this.showAssetExtractionNode,
-          height: this.nodeMetrics.assetExtraction.height,
+          height: this.getMeasuredHeight('assetExtraction', this.nodeMetrics.assetExtraction.height),
         },
         {
           key: 'storyboard',
           visible: this.showStoryboardNode && this.storyboards.length > 0,
-          height: this.nodeMetrics.storyboard.height,
+          height: Math.max(
+            this.nodeMetrics.storyboard.height,
+            ...this.storyboards.map((storyboard, index) => this.getMeasuredHeight(`storyboard-${index}`, this.nodeMetrics.storyboard.height))
+          ),
         },
         {
           key: 'image',
@@ -729,8 +773,9 @@ export default {
           height: Math.max(
             this.nodeMetrics.media.headerHeight + this.nodeMetrics.media.minPreviewHeight,
             ...this.storyboards
-              .filter(storyboard => this.showImageNode(storyboard))
-              .map(storyboard => this.getImageNodeHeight(storyboard))
+              .map((storyboard, index) => this.showImageNode(storyboard)
+                ? this.getMeasuredHeight(`image-${index}`, this.getImageNodeHeight(storyboard))
+                : 0)
           ),
         },
         {
@@ -739,8 +784,9 @@ export default {
           height: Math.max(
             this.nodeMetrics.multiGrid.headerHeight + this.nodeMetrics.multiGrid.minPreviewHeight + this.nodeMetrics.multiGrid.minTilesHeight,
             ...this.storyboards
-              .filter(storyboard => this.showMultiGridNode(storyboard))
-              .map(storyboard => this.getMultiGridNodeHeight(storyboard))
+              .map((storyboard, index) => this.showMultiGridNode(storyboard)
+                ? this.getMeasuredHeight(`multi-grid-${index}`, this.getMultiGridNodeHeight(storyboard))
+                : 0)
           ),
         },
         {
@@ -749,14 +795,21 @@ export default {
           height: Math.max(
             this.nodeMetrics.imageEdit.headerHeight + this.nodeMetrics.imageEdit.minPreviewHeight + this.nodeMetrics.imageEdit.minResultsHeight,
             ...this.storyboards
-              .filter(storyboard => this.showImageEditNode(storyboard))
-              .map(storyboard => this.getImageEditNodeHeight(storyboard))
+              .map((storyboard, index) => this.showImageEditNode(storyboard)
+                ? this.getMeasuredHeight(`image-edit-${index}`, this.getImageEditNodeHeight(storyboard))
+                : 0)
           ),
         },
         {
           key: 'camera',
           visible: this.storyboards.some(storyboard => this.showCameraNode(storyboard)),
-          height: this.nodeMetrics.camera.height,
+          height: Math.max(
+            this.nodeMetrics.camera.height,
+            ...this.storyboards
+              .map((storyboard, index) => this.showCameraNode(storyboard)
+                ? this.getMeasuredHeight(`camera-${index}`, this.nodeMetrics.camera.height)
+                : 0)
+          ),
         },
         {
           key: 'video',
@@ -764,38 +817,53 @@ export default {
           height: Math.max(
             this.nodeMetrics.media.headerHeight + this.nodeMetrics.media.minPreviewHeight,
             ...this.storyboards
-              .filter(storyboard => this.showVideoNode(storyboard))
-              .map(storyboard => this.getVideoNodeHeight(storyboard))
+              .map((storyboard, index) => this.showVideoNode(storyboard)
+                ? this.getMeasuredHeight(`video-${index}`, this.getVideoNodeHeight(storyboard))
+                : 0)
           ),
         },
       ];
 
-      stageRows.forEach((row, index) => {
+      stageRows.forEach((row) => {
         if (!row.visible) {
           return;
         }
 
-        rowY[row.key] = currentY;
-
-        const nextVisibleRow = stageRows.slice(index + 1).find(item => item.visible);
-        if (!nextVisibleRow) {
-          return;
-        }
-
-        const gap = row.key === 'rewrite'
-          ? this.nodeMetrics.rewriteRowGap
-          : this.nodeMetrics.rowGap;
-
-        currentY += row.height + gap;
+        rowY[row.key] = this.gridMetrics.startY + currentRow * rowStep;
+        rowSpans[row.key] = getRowSpan(row.height);
+        currentRow += rowSpans[row.key];
       });
 
+      const getSpanWidth = (span) => span * this.gridMetrics.branchWidth + (span - 1) * this.gridMetrics.columnGap;
+      const getSpanForWidth = (width) => {
+        let span = 1;
+        while (span < this.gridMetrics.branchColumnCount && getSpanWidth(span) < width) {
+          span += 1;
+        }
+        return span;
+      };
+      const createCenteredSlot = (width) => {
+        const colSpan = getSpanForWidth(width);
+        const colStart = Math.max(0, Math.floor((this.gridMetrics.branchColumnCount - colSpan) / 2));
+        const spanWidth = getSpanWidth(colSpan);
+        const x = this.gridMetrics.startX
+          + colStart * (this.gridMetrics.branchWidth + this.gridMetrics.columnGap)
+          + ((spanWidth - width) / 2);
+
+        return {
+          colStart,
+          colSpan,
+          spanWidth,
+          x,
+        };
+      };
+
       return {
-        branchWidth,
-        columnCount,
-        totalWidth,
+        ...this.gridMetrics,
         rowY,
-        rewriteX: this.nodeMetrics.startX + ((totalWidth - this.nodeMetrics.rewrite.width) / 2),
-        assetExtractionX: this.nodeMetrics.startX + ((totalWidth - this.nodeMetrics.assetExtraction.width) / 2),
+        rowSpans,
+        rewriteSlot: createCenteredSlot(this.nodeMetrics.rewrite.width),
+        assetExtractionSlot: createCenteredSlot(this.nodeMetrics.assetExtraction.width),
       };
     },
     rewriteStage() {
@@ -957,14 +1025,14 @@ export default {
       positions.rewrite = {
         ...this.nodePositions.rewrite,
         width: this.nodeMetrics.rewrite.width,
-        height: this.nodeMetrics.rewrite.height
+        height: this.nodePositions.rewrite.height
       };
 
       if (this.showAssetExtractionNode) {
         positions.assetExtraction = {
           ...this.nodePositions.assetExtraction,
           width: this.nodeMetrics.assetExtraction.width,
-          height: this.nodeMetrics.assetExtraction.height
+          height: this.nodePositions.assetExtraction.height
         };
       }
 
@@ -977,7 +1045,7 @@ export default {
             x: storyboardPos.x,
             y: storyboardPos.y,
             width: this.nodeMetrics.storyboard.width,
-            height: this.nodeMetrics.storyboard.height
+            height: storyboardPos.height
           };
         }
 
@@ -988,7 +1056,7 @@ export default {
             x: imagePos.x,
             y: imagePos.y,
             width: this.nodeMetrics.media.width,
-            height: this.getImageNodeHeight(storyboard)
+            height: imagePos.height
           };
         }
 
@@ -998,7 +1066,7 @@ export default {
             x: multiGridPos.x,
             y: multiGridPos.y,
             width: this.nodeMetrics.multiGrid.width,
-            height: this.getMultiGridNodeHeight(storyboard)
+            height: multiGridPos.height
           };
         }
 
@@ -1008,7 +1076,7 @@ export default {
             x: imageEditPos.x,
             y: imageEditPos.y,
             width: this.nodeMetrics.imageEdit.width,
-            height: this.getImageEditNodeHeight(storyboard)
+            height: imageEditPos.height
           };
         }
 
@@ -1019,7 +1087,7 @@ export default {
             x: cameraPos.x,
             y: cameraPos.y,
             width: this.nodeMetrics.camera.width,
-            height: this.nodeMetrics.camera.height
+            height: cameraPos.height
           };
         }
 
@@ -1030,7 +1098,7 @@ export default {
             x: videoPos.x,
             y: videoPos.y,
             width: this.nodeMetrics.media.width,
-            height: this.getVideoNodeHeight(storyboard)
+            height: videoPos.height
           };
         }
       });
@@ -1088,6 +1156,10 @@ export default {
             this.$set(this.executingNodes.videos, storyboard.id, false);
           }
         });
+
+        this.$nextTick(() => {
+          this.refreshMeasuredNodeHeights();
+        });
       }
     },
     'project.asset_bindings': {
@@ -1123,6 +1195,10 @@ export default {
   mounted() {
     document.addEventListener('click', this.handleDocumentClick);
     this.loadProjectAssets();
+    this.$nextTick(() => {
+      this.setupNodeResizeObserver();
+      this.refreshMeasuredNodeHeights();
+    });
     // 调试信息
     console.log('[ProjectCanvas] Mounted');
     console.log('[ProjectCanvas] Project:', this.project);
@@ -1132,10 +1208,110 @@ export default {
   },
   beforeDestroy() {
     document.removeEventListener('click', this.handleDocumentClick);
+    if (this.resizeFlushFrame) {
+      cancelAnimationFrame(this.resizeFlushFrame);
+      this.resizeFlushFrame = null;
+    }
+    this.teardownNodeResizeObserver();
     this.resetNodeChatState();
   },
   methods: {
     formatDate,
+    getComponentRootElement(refName) {
+      const refTarget = this.$refs[refName];
+      const instance = Array.isArray(refTarget) ? refTarget[0] : refTarget;
+      if (!instance) {
+        return null;
+      }
+      return instance.$el || instance;
+    },
+    observeNodeElement(nodeKey, refName) {
+      const element = this.getComponentRootElement(refName);
+      if (!element || !this.nodeResizeObserver) {
+        return;
+      }
+      element.dataset.canvasNodeKey = nodeKey;
+      this.nodeResizeObserver.observe(element);
+      this.updateMeasuredNodeHeight(nodeKey, element);
+    },
+    queueMeasuredNodeHeight(nodeKey, nextHeight) {
+      if (!nodeKey || !nextHeight) {
+        return;
+      }
+      this.pendingMeasuredHeights = {
+        ...this.pendingMeasuredHeights,
+        [nodeKey]: nextHeight,
+      };
+      if (this.resizeFlushFrame) {
+        return;
+      }
+      this.resizeFlushFrame = requestAnimationFrame(() => {
+        this.resizeFlushFrame = null;
+        const pendingEntries = Object.entries(this.pendingMeasuredHeights || {});
+        this.pendingMeasuredHeights = {};
+        pendingEntries.forEach(([pendingNodeKey, pendingHeight]) => {
+          if (!pendingHeight || this.measuredNodeHeights[pendingNodeKey] === pendingHeight) {
+            return;
+          }
+          this.$set(this.measuredNodeHeights, pendingNodeKey, pendingHeight);
+        });
+      });
+    },
+    updateMeasuredNodeHeight(nodeKey, element, measuredHeight = null) {
+      if (!nodeKey || !element) {
+        return;
+      }
+      const nextHeight = Math.ceil(measuredHeight || element.getBoundingClientRect().height || element.offsetHeight || 0);
+      if (!nextHeight || this.measuredNodeHeights[nodeKey] === nextHeight) {
+        return;
+      }
+      this.queueMeasuredNodeHeight(nodeKey, nextHeight);
+    },
+    setupNodeResizeObserver() {
+      if (typeof ResizeObserver === 'undefined') {
+        return;
+      }
+      this.teardownNodeResizeObserver();
+      this.nodeResizeObserver = new ResizeObserver((entries) => {
+        entries.forEach((entry) => {
+          const nodeKey = entry.target?.dataset?.canvasNodeKey;
+          if (!nodeKey) {
+            return;
+          }
+          this.updateMeasuredNodeHeight(
+            nodeKey,
+            entry.target,
+            entry.contentRect?.height,
+          );
+        });
+      });
+    },
+    teardownNodeResizeObserver() {
+      if (this.nodeResizeObserver) {
+        this.nodeResizeObserver.disconnect();
+        this.nodeResizeObserver = null;
+      }
+    },
+    refreshMeasuredNodeHeights() {
+      if (!this.nodeResizeObserver) {
+        return;
+      }
+      this.teardownNodeResizeObserver();
+      this.setupNodeResizeObserver();
+      this.observeNodeElement('rewrite', 'rewriteNode');
+      this.observeNodeElement('assetExtraction', 'assetExtractionNode');
+      this.storyboards.forEach((storyboard, index) => {
+        this.observeNodeElement(`storyboard-${index}`, `storyboardNode-${index}`);
+        this.observeNodeElement(`image-${index}`, `imageNode-${index}`);
+        this.observeNodeElement(`multi-grid-${index}`, `multiGridNode-${index}`);
+        this.observeNodeElement(`image-edit-${index}`, `imageEditNode-${index}`);
+        this.observeNodeElement(`camera-${index}`, `cameraNode-${index}`);
+        this.observeNodeElement(`video-${index}`, `videoNode-${index}`);
+      });
+    },
+    getMeasuredHeight(nodeKey, fallbackHeight) {
+      return this.measuredNodeHeights[nodeKey] || fallbackHeight;
+    },
     getEpisodeLabel(episode) {
       return episode.display_name || episode.episode_title || episode.name;
     },
@@ -1614,16 +1790,22 @@ export default {
     },
 
     getBranchNodeX(index, nodeWidth) {
-      return this.nodeMetrics.startX
-        + index * (this.treeLayout.branchWidth + this.nodeMetrics.columnGap)
-        + ((this.treeLayout.branchWidth - nodeWidth) / 2);
+      return this.gridLayout.startX
+        + index * (this.gridLayout.branchWidth + this.gridLayout.columnGap)
+        + ((this.gridLayout.branchWidth - nodeWidth) / 2);
+    },
+
+    getGridAllocatedHeight(rowKey, fallbackHeight) {
+      const rowSpan = this.gridLayout.rowSpans?.[rowKey] || 1;
+      return rowSpan * this.gridLayout.rowUnitHeight + Math.max(rowSpan - 1, 0) * this.gridLayout.rowGap;
     },
 
     // 计算分镜节点位置（第二行横向排列）
     calculateStoryboardPosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.storyboard.width),
-        y: this.treeLayout.rowY.storyboard || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.storyboard || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('storyboard', this.nodeMetrics.storyboard.height)
       };
     },
 
@@ -1631,7 +1813,8 @@ export default {
     calculateImagePosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.media.width),
-        y: this.treeLayout.rowY.image || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.image || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('image', this.getImageNodeHeight(this.storyboards[index]))
       };
     },
 
@@ -1639,21 +1822,24 @@ export default {
     calculateMultiGridPosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.multiGrid.width),
-        y: this.treeLayout.rowY.multiGrid || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.multiGrid || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('multiGrid', this.getMultiGridNodeHeight(this.storyboards[index]))
       };
     },
 
     calculateImageEditPosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.imageEdit.width),
-        y: this.treeLayout.rowY.imageEdit || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.imageEdit || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('imageEdit', this.getImageEditNodeHeight(this.storyboards[index]))
       };
     },
 
     calculateCameraPosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.camera.width),
-        y: this.treeLayout.rowY.camera || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.camera || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('camera', this.nodeMetrics.camera.height)
       };
     },
 
@@ -1661,7 +1847,8 @@ export default {
     calculateVideoPosition(index) {
       return {
         x: this.getBranchNodeX(index, this.nodeMetrics.media.width),
-        y: this.treeLayout.rowY.video || this.nodeMetrics.startY
+        y: this.gridLayout.rowY.video || this.nodeMetrics.startY,
+        height: this.getGridAllocatedHeight('video', this.getVideoNodeHeight(this.storyboards[index]))
       };
     },
 

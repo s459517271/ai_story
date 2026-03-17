@@ -1,7 +1,7 @@
 <template>
   <div
     class="layout-shell"
-    :class="{ 'rail-collapsed': sidebarCollapsed, 'theme-dark': isDark }"
+    :class="{ 'rail-collapsed': sidebarCollapsed, 'topbar-collapsed': topbarCollapsed, 'theme-dark': isDark }"
   >
     <!-- 移动端抽屉切换 -->
     <input
@@ -12,153 +12,183 @@
 
     <!-- 主内容区 -->
     <div class="drawer-content flex flex-col">
-      <!-- 顶部导航栏 -->
-      <header class="topbar">
-        <div class="topbar-left">
-          <!-- 移动端菜单按钮 -->
-          <div class="flex-none lg:hidden">
-            <label
-              for="main-drawer"
-              class="icon-button"
-              aria-label="打开导航"
+      <div
+        class="topbar-hover-zone hidden lg:block"
+        aria-hidden="true"
+      />
+      <section
+        class="topbar-stage"
+        :class="{ 'is-collapsed': topbarCollapsed }"
+      >
+        <!-- 顶部导航栏 -->
+        <header class="topbar">
+          <div class="topbar-left">
+            <!-- 移动端菜单按钮 -->
+            <div class="flex-none lg:hidden">
+              <label
+                for="main-drawer"
+                class="icon-button"
+                aria-label="打开导航"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  class="inline-block w-5 h-5 stroke-current"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </label>
+            </div>
+
+            <div class="brand-chip">
+              AI Story
+            </div>
+
+            <!-- 面包屑导航 -->
+            <div class="text-sm breadcrumbs">
+              <ul>
+                <li
+                  v-for="(item, index) in breadcrumbs"
+                  :key="index"
+                >
+                  <router-link :to="item.path">
+                    {{ item.label }}
+                  </router-link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 右侧操作按钮 -->
+          <div class="topbar-actions">
+            <button
+              class="icon-button hidden lg:inline-flex"
+              :aria-label="topbarCollapsed ? '展开头部栏' : '收起头部栏'"
+              :title="topbarCollapsed ? '展开头部栏' : '收起头部栏'"
+              @click="toggleTopbar"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
-                class="inline-block w-5 h-5 stroke-current"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-5 h-5 transition-transform duration-300"
+                :class="{ 'rotate-180': !topbarCollapsed }"
               >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 6h16M4 12h16M4 18h16"
+                  d="M19.5 8.25l-7.5 7.5-7.5-7.5"
                 />
               </svg>
-            </label>
-          </div>
-
-          <div class="brand-chip">
-            AI Story
-          </div>
-
-          <!-- 面包屑导航 -->
-          <div class="text-sm breadcrumbs">
-            <ul>
-              <li
-                v-for="(item, index) in breadcrumbs"
-                :key="index"
+            </button>
+            <button
+              class="icon-button"
+              :aria-label="isDark ? '切换到浅色主题' : '切换到深色主题'"
+              :title="isDark ? '切换到浅色主题' : '切换到深色主题'"
+              @click="handleThemeToggle"
+            >
+              <svg
+                v-if="isDark"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-5 h-5"
               >
-                <router-link :to="item.path">
-                  {{ item.label }}
-                </router-link>
-              </li>
-            </ul>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 3v2.25m0 13.5V21m-6.364-2.636l1.591-1.591m9.546-9.546l1.591-1.591M3 12h2.25m13.5 0H21m-2.636 6.364l-1.591-1.591m-9.546-9.546l-1.591-1.591M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              <svg
+                v-else
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-5 h-5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M21.752 15.002A9.718 9.718 0 0112 21.75a9.75 9.75 0 01-9.75-9.75 9.718 9.718 0 016.748-9.252.75.75 0 01.96.93 7.5 7.5 0 009.364 9.364.75.75 0 01.93.96z"
+                />
+              </svg>
+            </button>
+            <button
+              class="icon-button"
+              aria-label="刷新"
+              @click="handleRefresh"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="w-5 h-5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                />
+              </svg>
+            </button>
+
+            <!-- 用户菜单 -->
+            <div class="dropdown dropdown-end">
+              <label
+                tabindex="0"
+                class="icon-button avatar placeholder"
+                aria-label="用户菜单"
+              >
+                <div class="avatar-orb">
+                  <span class="text-lg">{{ userInitial }}</span>
+                </div>
+              </label>
+              <ul
+                tabindex="0"
+                class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-52"
+              >
+                <li class="menu-title">
+                  <span>{{ username }}</span>
+                </li>
+                <li>
+                  <a @click="handleLogout">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      class="w-5 h-5"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
+                      />
+                    </svg>
+                    退出登录
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
-
-        <!-- 右侧操作按钮 -->
-        <div class="topbar-actions">
-          <button
-            class="icon-button"
-            :aria-label="isDark ? '切换到浅色主题' : '切换到深色主题'"
-            :title="isDark ? '切换到浅色主题' : '切换到深色主题'"
-            @click="handleThemeToggle"
-          >
-            <svg
-              v-if="isDark"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="w-5 h-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M12 3v2.25m0 13.5V21m-6.364-2.636l1.591-1.591m9.546-9.546l1.591-1.591M3 12h2.25m13.5 0H21m-2.636 6.364l-1.591-1.591m-9.546-9.546l-1.591-1.591M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            <svg
-              v-else
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="w-5 h-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M21.752 15.002A9.718 9.718 0 0112 21.75a9.75 9.75 0 01-9.75-9.75 9.718 9.718 0 016.748-9.252.75.75 0 01.96.93 7.5 7.5 0 009.364 9.364.75.75 0 01.93.96z"
-              />
-            </svg>
-          </button>
-          <button
-            class="icon-button"
-            aria-label="刷新"
-            @click="handleRefresh"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="w-5 h-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-              />
-            </svg>
-          </button>
-
-          <!-- 用户菜单 -->
-          <div class="dropdown dropdown-end">
-            <label
-              tabindex="0"
-              class="icon-button avatar placeholder"
-              aria-label="用户菜单"
-            >
-              <div class="avatar-orb">
-                <span class="text-lg">{{ userInitial }}</span>
-              </div>
-            </label>
-            <ul
-              tabindex="0"
-              class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-52"
-            >
-              <li class="menu-title">
-                <span>{{ username }}</span>
-              </li>
-              <li>
-                <a @click="handleLogout">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="w-5 h-5"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
-                    />
-                  </svg>
-                  退出登录
-                </a>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </header>
-
+        </header>
+      </section>
       <!-- 页面内容 -->
       <main class="main-surface">
         <router-view />
@@ -372,7 +402,7 @@ export default {
   name: 'Layout',
   computed: {
     ...mapGetters('auth', ['username', 'user']),
-    ...mapGetters('ui', ['sidebarCollapsed', 'isDark']),
+    ...mapGetters('ui', ['sidebarCollapsed', 'topbarCollapsed', 'isDark']),
     activeMenu() {
       const route = this.$route;
       const { path } = route;
@@ -405,7 +435,7 @@ export default {
   },
   methods: {
     ...mapActions('auth', ['logout']),
-    ...mapActions('ui', ['toggleSidebar', 'toggleTheme']),
+    ...mapActions('ui', ['toggleSidebar', 'toggleTopbar', 'toggleTheme']),
     handleRefresh() {
       this.$router.go(0);
     },
@@ -509,6 +539,23 @@ export default {
   display: none;
 }
 
+.topbar-hover-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 18px;
+  z-index: 24;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.topbar-stage {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 25;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -522,6 +569,7 @@ export default {
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(14px);
   animation: surface-rise 520ms ease;
+  transition: transform 260ms ease, opacity 220ms ease, box-shadow 260ms ease;
 }
 
 .layout-shell.theme-dark .topbar {
@@ -851,6 +899,31 @@ export default {
   .main-surface {
     margin: 16px;
     padding: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout-shell.topbar-collapsed .topbar-hover-zone {
+    pointer-events: auto;
+  }
+
+  .layout-shell.topbar-collapsed .topbar-stage {
+    height: 0;
+    overflow: visible;
+  }
+
+  .layout-shell.topbar-collapsed .topbar {
+    margin: 0 20px;
+    opacity: 0;
+    transform: translateY(calc(-100% - 14px));
+    pointer-events: none;
+  }
+
+  .layout-shell.topbar-collapsed .topbar-hover-zone:hover + .topbar-stage .topbar,
+  .layout-shell.topbar-collapsed .topbar-stage:hover .topbar {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
