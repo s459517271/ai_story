@@ -230,7 +230,7 @@ def _launch_queue_task(queue_task_id: str) -> EpisodeTaskQueue:
         )
     elif queue_task.task_type == 'stage':
         stage_name = queue_task.stage_name
-        if stage_name in ['rewrite', 'storyboard', 'camera_movement']:
+        if stage_name in ['rewrite', 'asset_extraction', 'storyboard', 'camera_movement']:
             task = execute_llm_stage.delay(
                 project_id=str(project.id),
                 stage_name=stage_name,

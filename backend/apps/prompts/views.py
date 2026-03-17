@@ -667,7 +667,7 @@ class PromptDebugSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='run-stream-init')
     def run_stream_init(self, request, pk=None):
         session = self.get_object()
-        if session.stage_type not in ('rewrite', 'storyboard', 'camera_movement'):
+        if session.stage_type not in ('rewrite', 'asset_extraction', 'storyboard', 'camera_movement'):
             return Response({'error': '仅 LLM 类型阶段支持流式调试'}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = PromptDebugRunCreateSerializer(data=request.data)
@@ -697,7 +697,7 @@ class PromptDebugSessionViewSet(viewsets.ModelViewSet):
         session = PromptDebugSession.objects.select_related('created_by', 'prompt_template').filter(id=pk).first()
         if not session:
             return Response({'error': '调试会话不存在'}, status=status.HTTP_404_NOT_FOUND)
-        if session.stage_type not in ('rewrite', 'storyboard', 'camera_movement'):
+        if session.stage_type not in ('rewrite', 'asset_extraction', 'storyboard', 'camera_movement'):
             return Response({'error': '仅 LLM 类型阶段支持流式调试'}, status=status.HTTP_400_BAD_REQUEST)
 
         stream_token = request.query_params.get('stream_token', '').strip()

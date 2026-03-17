@@ -675,7 +675,7 @@ export default {
     stageType: {
       type: String,
       required: true,
-      validator: (value) => ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'].includes(value),
+      validator: (value) => ['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit'].includes(value),
     },
   },
   data() {
@@ -1046,6 +1046,7 @@ export default {
     getStageName() {
       const names = {
         rewrite: '文案改写',
+        asset_extraction: '资产抽取',
         storyboard: '分镜生成',
         image_generation: '文生图',
         multi_grid_image: '多宫格图片',

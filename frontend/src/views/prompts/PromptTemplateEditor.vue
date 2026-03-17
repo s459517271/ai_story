@@ -500,6 +500,7 @@ export default {
       availableModels: [], // 可用的AI模型列表
       stageToProviderType: {
         rewrite: 'llm',
+        asset_extraction: 'llm',
         storyboard: 'llm',
         image_generation: 'text2image',
         multi_grid_image: 'text2image',

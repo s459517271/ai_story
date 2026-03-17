@@ -135,6 +135,7 @@ class PromptTemplateSerializer(serializers.ModelSerializer):
             # 定义阶段类型与模型类型的映射
             stage_to_provider_type = {
                 'rewrite': 'llm',
+                'asset_extraction': 'llm',
                 'storyboard': 'llm',
                 'image_generation': 'text2image',
                 'multi_grid_image': 'text2image',

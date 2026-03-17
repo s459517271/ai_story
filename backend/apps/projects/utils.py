@@ -6,6 +6,7 @@ from apps.prompts.models import PromptTemplate, PromptTemplateSet
 
 PROJECT_STAGE_TYPES = [
     'rewrite',
+    'asset_extraction',
     'storyboard',
     'image_generation',
     'multi_grid_image',
@@ -13,6 +14,20 @@ PROJECT_STAGE_TYPES = [
     'video_generation',
     'image_edit',
 ]
+
+
+def ensure_project_stages(project, stage_types=None):
+    """确保项目存在指定阶段记录，兼容旧项目缺失阶段数据的情况。"""
+    from .models import ProjectStage
+
+    target_stage_types = stage_types or PROJECT_STAGE_TYPES
+
+    for stage_type in target_stage_types:
+        ProjectStage.objects.get_or_create(
+            project=project,
+            stage_type=stage_type,
+            defaults={'status': 'pending'},
+        )
 
 
 def get_effective_prompt_template_set(project):
@@ -41,7 +56,7 @@ def get_project_stage_order(stage_states=None):
     """根据阶段启用状态返回实际执行顺序。"""
     normalized = normalize_stage_template_states(stage_states or {stage_type: True for stage_type in PROJECT_STAGE_TYPES})
 
-    stage_order = ['rewrite', 'storyboard']
+    stage_order = ['rewrite', 'asset_extraction', 'storyboard']
 
     if normalized.get('multi_grid_image'):
         stage_order.append('multi_grid_image')

@@ -20,6 +20,7 @@ class ProjectWorkflowService:
     # 默认阶段顺序（实际执行顺序以 get_project_stage_order 为准）
     STAGE_ORDER = [
         'rewrite',
+        'asset_extraction',
         'storyboard',
         'multi_grid_image',
         'image_edit',

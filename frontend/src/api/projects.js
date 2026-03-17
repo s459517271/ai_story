@@ -46,6 +46,16 @@ export default {
     });
   },
 
+  applyAssetExtraction(projectId, items = []) {
+    return apiClient.post(`/projects/projects/${projectId}/apply_asset_extraction/`, {
+      items,
+    });
+  },
+
+  getAssetExtractionAssets(projectId) {
+    return apiClient.get(`/projects/projects/${projectId}/asset_extraction_assets/`);
+  },
+
   createProject(data) {
     return apiClient.post('/projects/projects/', data);
   },

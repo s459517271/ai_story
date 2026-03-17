@@ -147,6 +147,36 @@ class ProjectViewSet(viewsets.ModelViewSet):
             Q(scope='system', is_active=True)
         ).order_by('group', 'key')
 
+    def _serialize_asset_stage(self, stage):
+        output_data = stage.output_data or {}
+        return {
+            'source_text': output_data.get('source_text', ''),
+            'source_type': output_data.get('source_type', 'original_topic'),
+            'summary': output_data.get('summary', ''),
+            'items': output_data.get('items', []),
+            'raw_text': output_data.get('raw_text', ''),
+            'updated_at': output_data.get('updated_at'),
+        }
+
+    def _serialize_asset_choice(self, asset):
+        return {
+            'id': str(asset.id),
+            'key': asset.key,
+            'group': asset.group,
+            'description': asset.description,
+            'variable_type': asset.variable_type,
+            'scope': asset.scope,
+            'scope_display': asset.get_scope_display(),
+        }
+
+    def _ensure_project_asset_binding(self, project, asset):
+        ProjectAssetBinding.objects.get_or_create(project=project, asset=asset)
+
+    def _serialize_asset_binding_results(self, project):
+        bindings = project.asset_bindings.select_related('asset').all()
+        serializer = ProjectAssetBindingSerializer(bindings, many=True, context=self.get_serializer_context())
+        return {'results': serializer.data, 'count': len(serializer.data)}
+
     def _get_node_chat_template(self, project, node_type):
         stage_type_map = {
             'storyboard': 'storyboard',
@@ -672,8 +702,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         stage_template_states = get_stage_template_states(project)
 
-        # 获取 rewrite 和 storyboard 阶段
+        # 获取 rewrite / asset_extraction / storyboard 阶段
         rewrite_stage = project.stages.filter(stage_type='rewrite').first()
+        asset_extraction_stage = project.stages.filter(stage_type='asset_extraction').first()
         storyboard_stage = project.stages.filter(stage_type='storyboard').first()
 
         # 获取其他阶段用于数据整合
@@ -711,6 +742,39 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 'template_enabled': stage_template_states.get('rewrite', True),
                 'domain_data': {
                     'content_rewrite': None
+                }
+            })
+
+        if asset_extraction_stage:
+            asset_extraction_serializer = ProjectStageSerializer(asset_extraction_stage)
+            asset_extraction_data = asset_extraction_serializer.data
+            asset_extraction_data['template_enabled'] = stage_template_states.get('asset_extraction', True)
+            asset_extraction_data['domain_data'] = self._serialize_asset_stage(asset_extraction_stage)
+            result.append(asset_extraction_data)
+        else:
+            result.append({
+                'id': None,
+                'project': project.id,
+                'stage_type': 'asset_extraction',
+                'stage_type_display': '资产抽取',
+                'status': 'pending',
+                'status_display': '待处理',
+                'input_data': None,
+                'output_data': None,
+                'retry_count': 0,
+                'max_retries': 3,
+                'error_message': None,
+                'started_at': None,
+                'completed_at': None,
+                'created_at': None,
+                'template_enabled': stage_template_states.get('asset_extraction', True),
+                'domain_data': {
+                    'source_text': '',
+                    'source_type': 'original_topic',
+                    'summary': '',
+                    'items': [],
+                    'raw_text': '',
+                    'updated_at': None,
                 }
             })
 
@@ -1023,7 +1087,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
 
         # 根据阶段类型启动对应的Celery任务
-        if stage_name in ["rewrite", "storyboard", "camera_movement"]:
+        if stage_name in ["rewrite", "asset_extraction", "storyboard", "camera_movement"]:
             # LLM类阶段
             print("execute_llm_stage", settings.CELERY_BROKER_URL, execute_llm_stage.app.conf.broker_url)
             task = execute_llm_stage.delay(
@@ -1096,6 +1160,107 @@ class ProjectViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=True, methods=['post'])
+    def apply_asset_extraction(self, request, pk=None):
+        project = self.get_object()
+        stage = get_object_or_404(ProjectStage, project=project, stage_type='asset_extraction')
+        output_data = stage.output_data or {}
+        stage_items = output_data.get('items') or []
+        request_items = request.data.get('items') or []
+
+        stage_item_map = {item.get('temp_id'): dict(item) for item in stage_items if item.get('temp_id')}
+        accessible_assets = {
+            str(asset.id): asset
+            for asset in self._get_accessible_assets(request.user)
+        }
+
+        results = []
+        for entry in request_items:
+            temp_id = entry.get('temp_id')
+            action = entry.get('action')
+            stage_item = stage_item_map.get(temp_id)
+            if not stage_item or action not in {'bind_existing', 'create_new', 'overwrite_existing', 'skip'}:
+                continue
+
+            stage_item['selected_action'] = action
+            stage_item['selected_asset_id'] = entry.get('asset_id')
+            result_entry = {'temp_id': temp_id, 'action': action, 'status': 'skipped'}
+
+            if action == 'skip':
+                result_entry['status'] = 'skipped'
+                results.append(result_entry)
+                stage_item_map[temp_id] = stage_item
+                continue
+
+            if action in {'bind_existing', 'overwrite_existing'}:
+                asset_id = str(entry.get('asset_id') or '')
+                asset = accessible_assets.get(asset_id)
+                if not asset:
+                    result_entry['status'] = 'error'
+                    result_entry['error'] = '指定资产不存在或无权限访问'
+                    results.append(result_entry)
+                    stage_item_map[temp_id] = stage_item
+                    continue
+
+                if action == 'overwrite_existing':
+                    asset.key = entry.get('asset', {}).get('key') or stage_item.get('key') or asset.key
+                    asset.group = entry.get('asset', {}).get('group') or stage_item.get('group') or asset.group
+                    asset.description = entry.get('asset', {}).get('description') or asset.description
+                    asset.variable_type = entry.get('asset', {}).get('variable_type') or stage_item.get('variable_type') or asset.variable_type
+                    stage_value = entry.get('asset', {}).get('value', stage_item.get('value'))
+                    asset.value = json.dumps(stage_value, ensure_ascii=False) if asset.variable_type == 'json' else str(stage_value or '')
+                    asset.save()
+
+                self._ensure_project_asset_binding(project, asset)
+                stage_item['selected_asset_id'] = str(asset.id)
+                stage_item['match_status'] = 'matched'
+                result_entry['status'] = 'applied'
+                result_entry['asset'] = self._serialize_asset_choice(asset)
+                results.append(result_entry)
+                stage_item_map[temp_id] = stage_item
+                continue
+
+            if action == 'create_new':
+                asset_payload = entry.get('asset') or {}
+                key = asset_payload.get('key') or stage_item.get('key')
+                variable_type = asset_payload.get('variable_type') or stage_item.get('variable_type') or 'json'
+                value = asset_payload.get('value', stage_item.get('value'))
+                asset = GlobalVariable.objects.create(
+                    key=key,
+                    value=json.dumps(value, ensure_ascii=False) if variable_type == 'json' else str(value or ''),
+                    variable_type=variable_type,
+                    scope='user',
+                    group=asset_payload.get('group') or stage_item.get('group') or '',
+                    description=asset_payload.get('description') or '从资产抽取节点生成',
+                    created_by=request.user,
+                    is_active=True,
+                )
+                self._ensure_project_asset_binding(project, asset)
+                stage_item['selected_asset_id'] = str(asset.id)
+                stage_item['match_status'] = 'matched'
+                result_entry['status'] = 'applied'
+                result_entry['asset'] = self._serialize_asset_choice(asset)
+                results.append(result_entry)
+                stage_item_map[temp_id] = stage_item
+
+        output_data['items'] = [stage_item_map.get(item.get('temp_id'), item) for item in stage_items]
+        output_data['updated_at'] = timezone.now().isoformat()
+        stage.output_data = output_data
+        stage.save(update_fields=['output_data'])
+
+        return Response({
+            'message': '资产抽取结果已应用',
+            'results': results,
+            'stage': ProjectStageSerializer(stage).data,
+            'bindings': self._serialize_asset_binding_results(project),
+        })
+
+    @action(detail=True, methods=['get'])
+    def asset_extraction_assets(self, request, pk=None):
+        queryset = self._get_accessible_assets(request.user)
+        serializer = GlobalVariableListSerializer(queryset, many=True, context=self.get_serializer_context())
+        return Response({'results': serializer.data, 'count': len(serializer.data)})
 
     @action(detail=True, methods=["get"])
     def task_status(self, request, pk=None):

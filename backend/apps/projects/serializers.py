@@ -10,7 +10,7 @@ from rest_framework import serializers
 from apps.content.models import ContentRewrite, EditedImage
 from apps.models.serializers import ModelProviderDetailSerializer
 from apps.prompts.serializers import GlobalVariableListSerializer
-from apps.projects.utils import parse_storyboard_json
+from apps.projects.utils import ensure_project_stages, parse_storyboard_json
 from .models import EpisodeTaskQueue, Project, ProjectStage, ProjectModelConfig, ProjectAssetBinding, Series
 
 
@@ -26,13 +26,7 @@ def get_latest_episode(series):
 
 
 def initialize_project_resources(project):
-    stage_types = ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
-    for stage_type in stage_types:
-        ProjectStage.objects.create(
-            project=project,
-            stage_type=stage_type,
-            status='pending'
-        )
+    ensure_project_stages(project)
 
     ProjectModelConfig.objects.create(project=project)
 
@@ -804,7 +798,7 @@ class StageRetrySerializer(serializers.Serializer):
     """阶段重试序列化器"""
 
     stage_name = serializers.ChoiceField(
-        choices=['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
+        choices=['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
     )
 
     def validate_stage_name(self, value):
@@ -829,7 +823,7 @@ class StageExecuteSerializer(serializers.Serializer):
     """阶段执行序列化器"""
 
     stage_name = serializers.ChoiceField(
-        choices=['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']
+        choices=['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit', 'asset_extraction']
     )
     input_data = serializers.JSONField(required=False, default=dict)
 
@@ -841,9 +835,11 @@ class StageExecuteSerializer(serializers.Serializer):
             raise serializers.ValidationError('缺少项目ID')
 
         try:
-            Project.objects.get(id=project_id)
+            project = Project.objects.get(id=project_id)
         except Project.DoesNotExist:
             raise serializers.ValidationError('项目不存在')
+
+        ensure_project_stages(project, [stage_name])
 
         try:
             ProjectStage.objects.get(project_id=project_id, stage_type=stage_name)

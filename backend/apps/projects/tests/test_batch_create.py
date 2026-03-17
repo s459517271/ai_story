@@ -56,7 +56,7 @@ class ProjectBatchCreateAPITestCase(APITestCase):
         self.assertEqual(projects[1].name, '白骨风波')
         self.assertTrue(all(project.prompt_template_set_id == self.prompt_set.id for project in projects))
         self.assertTrue(all(project.description == '同一套基础设定' for project in projects))
-        self.assertEqual(ProjectStage.objects.filter(project__in=projects).count(), 14)
+        self.assertEqual(ProjectStage.objects.filter(project__in=projects).count(), 16)
         self.assertEqual(ContentRewrite.objects.filter(project__in=projects).count(), 2)
 
     def test_batch_create_uses_latest_episode_defaults(self):
@@ -71,7 +71,7 @@ class ProjectBatchCreateAPITestCase(APITestCase):
             original_topic='旧文案',
             prompt_template_set=self.prompt_set,
         )
-        for stage_type in ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']:
+        for stage_type in ['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']:
             ProjectStage.objects.create(project=latest, stage_type=stage_type, status='pending')
         ContentRewrite.objects.create(project=latest, original_text=latest.original_topic)
 

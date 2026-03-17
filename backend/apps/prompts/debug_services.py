@@ -30,6 +30,7 @@ class PromptDebugService:
 
     STAGE_PROVIDER_TYPE_MAP = {
         'rewrite': 'llm',
+        'asset_extraction': 'llm',
         'storyboard': 'llm',
         'camera_movement': 'llm',
         'image_generation': 'text2image',
@@ -681,7 +682,7 @@ class PromptDebugService:
             rendered_prompt=rendered_prompt,
         )
 
-        if session.stage_type in ('rewrite', 'storyboard', 'camera_movement'):
+        if session.stage_type in ('rewrite', 'asset_extraction', 'storyboard', 'camera_movement'):
             result = cls._run_llm(provider, rendered_prompt)
             parsed_output = cls.parse_output(session.stage_type, result['raw_text'])
         elif session.stage_type in ('image_generation', 'multi_grid_image'):

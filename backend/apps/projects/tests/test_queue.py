@@ -16,7 +16,7 @@ User = get_user_model()
 
 
 def initialize_project(project):
-    for stage_type in ['rewrite', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']:
+    for stage_type in ['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'multi_grid_image', 'camera_movement', 'video_generation', 'image_edit']:
         ProjectStage.objects.create(project=project, stage_type=stage_type, status='pending')
     ContentRewrite.objects.create(project=project, original_text=project.original_topic)
 
@@ -264,6 +264,42 @@ class ImageRegenerateBehaviorTestCase(APITestCase):
             user_id=self.user.id,
         )
 
+    @patch('apps.projects.views.is_stage_template_enabled', return_value=True)
+    @patch('apps.projects.tasks.execute_llm_stage.delay')
+    def test_execute_stage_auto_creates_missing_asset_extraction_stage(self, mock_delay, _mock_stage_enabled):
+        project = Project.objects.create(
+            user=self.user,
+            series=self.series,
+            episode_number=2,
+            sort_order=2,
+            episode_title='第2集',
+            name='旧项目',
+            original_topic='缺少资产抽取阶段',
+        )
+
+        ProjectStage.objects.create(project=project, stage_type='rewrite', status='pending')
+        ContentRewrite.objects.create(project=project, original_text=project.original_topic)
+
+        mock_delay.return_value = SimpleNamespace(id='celery-llm-task')
+
+        response = self.client.post(
+            reverse('project-execute-stage', args=[project.id]),
+            {
+                'stage_name': 'asset_extraction',
+                'input_data': {},
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertTrue(ProjectStage.objects.filter(project=project, stage_type='asset_extraction').exists())
+        mock_delay.assert_called_once_with(
+            project_id=str(project.id),
+            stage_name='asset_extraction',
+            input_data={},
+            user_id=self.user.id,
+        )
+
 
     def test_get_missing_video_storyboard_ids_skips_completed_by_default(self):
         image = GeneratedImage.objects.create(
@@ -349,6 +385,7 @@ class ProjectStageFlowRuleTestCase(APITestCase):
     def test_normalize_stage_template_states_prefers_advanced_image_flow(self):
         normalized = normalize_stage_template_states({
             'rewrite': True,
+            'asset_extraction': True,
             'storyboard': True,
             'image_generation': True,
             'multi_grid_image': True,
@@ -374,12 +411,13 @@ class ProjectStageFlowRuleTestCase(APITestCase):
 
         self.assertEqual(
             stage_order,
-            ['rewrite', 'storyboard', 'multi_grid_image', 'image_edit', 'camera_movement', 'video_generation']
+            ['rewrite', 'asset_extraction', 'storyboard', 'multi_grid_image', 'image_edit', 'camera_movement', 'video_generation']
         )
 
     def test_get_project_stage_order_keeps_image_generation_when_advanced_flow_disabled(self):
         stage_order = get_project_stage_order({
             'rewrite': True,
+            'asset_extraction': True,
             'storyboard': True,
             'image_generation': True,
             'multi_grid_image': False,
@@ -390,7 +428,7 @@ class ProjectStageFlowRuleTestCase(APITestCase):
 
         self.assertEqual(
             stage_order,
-            ['rewrite', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']
+            ['rewrite', 'asset_extraction', 'storyboard', 'image_generation', 'camera_movement', 'video_generation']
         )
 
 

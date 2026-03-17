@@ -14,6 +14,7 @@ from core.redis import RedisStreamPublisher
 from core.services.jianying_draft_service import JianyingDraftGenerator
 from apps.content.models import EditedImage, GeneratedImage, GeneratedVideo, Storyboard
 from apps.content.processors.llm_stage import LLMStageProcessor
+from apps.content.processors.asset_extraction_stage import AssetExtractionStageProcessor
 from apps.content.processors.text2image_stage import Text2ImageStageProcessor
 from apps.content.processors.multi_grid_image_stage import MultiGridImageStageProcessor
 from apps.content.processors.image_edit_stage import ImageEditStageProcessor
@@ -199,7 +200,7 @@ def execute_llm_stage(
         )
 
         # 创建处理器
-        processor = LLMStageProcessor(stage_type=stage_name)
+        processor = AssetExtractionStageProcessor() if stage_name == 'asset_extraction' else LLMStageProcessor(stage_type=stage_name)
 
         # 执行流式处理
         full_text = ""
@@ -1204,7 +1205,7 @@ def run_full_pipeline_task(
                 )
 
                 # 根据阶段类型调用对应的任务
-                if stage_name in ['rewrite', 'storyboard', 'camera_movement']:
+                if stage_name in ['rewrite', 'asset_extraction', 'storyboard', 'camera_movement']:
                     # LLM类阶段
                     input_data = stage.input_data or {}
                     result = execute_llm_stage(

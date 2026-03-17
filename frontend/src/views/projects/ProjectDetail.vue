@@ -570,8 +570,7 @@ export default {
 
     async handleAssetBindingsUpdated() {
       try {
-        const projectId = this.$route.params.id;
-        this.project = await this.fetchProject(projectId);
+        await this.refreshCanvasData();
       } catch (error) {
         console.error('[ProjectDetail] 刷新项目资产绑定失败:', error);
       }
@@ -636,6 +635,7 @@ export default {
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
               'rewrite': '文案改写',
+              'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',
               'multi_grid_image': '多宫格图片',
@@ -662,6 +662,7 @@ export default {
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
               'rewrite': '文案改写',
+              'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',
               'multi_grid_image': '多宫格图片',
@@ -765,6 +766,7 @@ export default {
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
               'rewrite': '文案改写',
+              'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',
               'multi_grid_image': '多宫格图片',

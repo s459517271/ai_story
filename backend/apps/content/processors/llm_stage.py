@@ -445,6 +445,7 @@ class LLMStageProcessor(StageProcessor):
             # 根据阶段类型获取对应的模型提供商
             provider_field_map = {
                 'rewrite': 'rewrite_providers',
+                'asset_extraction': 'rewrite_providers',
                 'storyboard': 'storyboard_providers',
                 'camera_movement': 'camera_providers',
             }
@@ -585,6 +586,7 @@ class LLMStageProcessor(StageProcessor):
         if config:
             provider_field_map = {
                 'rewrite': 'rewrite_providers',
+                'asset_extraction': 'rewrite_providers',
                 'storyboard': 'storyboard_providers',
                 'camera_movement': 'camera_providers',
             }
@@ -607,6 +609,7 @@ class LLMStageProcessor(StageProcessor):
         """获取最大token数(根据阶段类型)"""
         token_map = {
             'rewrite': 4096,
+            'asset_extraction': 4096,
             'storyboard': 40960,
             'camera_movement': 4096,
         }
@@ -616,6 +619,7 @@ class LLMStageProcessor(StageProcessor):
         """获取temperature参数(根据阶段类型)"""
         temp_map = {
             'rewrite': 0.7,
+            'asset_extraction': 0.3,
             'storyboard': 0.8,
             'camera_movement': 0.6,
         }
@@ -625,6 +629,7 @@ class LLMStageProcessor(StageProcessor):
         """获取阶段显示名称"""
         name_map = {
             'rewrite': '改写文案',
+            'asset_extraction': '资产抽取',
             'storyboard': '分镜脚本',
             'camera_movement': '运镜参数',
         }

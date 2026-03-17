@@ -341,6 +341,17 @@
           @node-dblclick="focusCanvasNode('rewrite')"
         />
 
+        <asset-extraction-node
+          v-if="showAssetExtractionNode"
+          :status="assetExtractionStage ? assetExtractionStage.status : 'pending'"
+          :position="nodePositions.assetExtraction"
+          :data="assetExtractionStage ? assetExtractionStage.domain_data : null"
+          :project-id="project.id"
+          :available-assets="availableAssets"
+          @execute="handleExecuteStage"
+          @asset-bindings-updated="$emit('asset-bindings-updated')"
+        />
+
         <!-- 每个分镜及其子节点 -->
         <template v-for="(storyboard, index) in storyboards">
           <!-- 分镜节点 -->
@@ -496,6 +507,7 @@
 <script>
 import FlowCanvas from './FlowCanvas.vue';
 import RewriteNodeExpanded from './RewriteNodeExpanded.vue';
+import AssetExtractionNode from './AssetExtractionNode.vue';
 import StoryboardNode from './StoryboardNode.vue';
 import ImageGenNode from './ImageGenNode.vue';
 import MultiGridImageNode from './MultiGridImageNode.vue';
@@ -514,6 +526,7 @@ export default {
   components: {
     FlowCanvas,
     RewriteNodeExpanded,
+    AssetExtractionNode,
     StoryboardNode,
     ImageGenNode,
     MultiGridImageNode,
@@ -559,6 +572,7 @@ export default {
       // 跟踪正在执行的阶段（用于整个阶段的 loading 状态）
       executingStages: {
         rewrite: false,
+        asset_extraction: false,
         storyboard: false,
         image_generation: false,
         multi_grid_image: false,
@@ -656,12 +670,17 @@ export default {
         rewrite: {
           x: this.treeLayout.rewriteX,
           y: this.treeLayout.rowY.rewrite || this.nodeMetrics.startY
+        },
+        assetExtraction: {
+          x: this.treeLayout.assetExtractionX,
+          y: this.treeLayout.rowY.assetExtraction || this.nodeMetrics.startY
         }
       };
     },
     nodeMetrics() {
       return {
         rewrite: { width: 620, height: 300 },
+        assetExtraction: { width: 620, height: 320 },
         storyboard: { width: 280, height: 250 },
         media: { width: 250, headerHeight: 50, minPreviewHeight: 140 },
         multiGrid: { width: 250, headerHeight: 58, minPreviewHeight: 120, minTilesHeight: 110 },
@@ -692,6 +711,11 @@ export default {
           key: 'rewrite',
           visible: true,
           height: this.nodeMetrics.rewrite.height,
+        },
+        {
+          key: 'assetExtraction',
+          visible: this.showAssetExtractionNode,
+          height: this.nodeMetrics.assetExtraction.height,
         },
         {
           key: 'storyboard',
@@ -770,16 +794,23 @@ export default {
         totalWidth,
         rowY,
         rewriteX: this.nodeMetrics.startX + ((totalWidth - this.nodeMetrics.rewrite.width) / 2),
+        assetExtractionX: this.nodeMetrics.startX + ((totalWidth - this.nodeMetrics.assetExtraction.width) / 2),
       };
     },
     rewriteStage() {
       return this.stages.find(s => s.stage_type === 'rewrite') || null;
+    },
+    assetExtractionStage() {
+      return this.stages.find(s => s.stage_type === 'asset_extraction') || null;
     },
     storyboardStage() {
       return this.stages.find(s => s.stage_type === 'storyboard') || null;
     },
     showRewriteNode() {
       return this.rewriteStage?.template_enabled !== false;
+    },
+    showAssetExtractionNode() {
+      return this.assetExtractionStage?.template_enabled !== false;
     },
     showStoryboardNode() {
       return this.storyboardStage?.template_enabled !== false;
@@ -841,12 +872,21 @@ export default {
     connections() {
       const conns = [];
 
-      // 文案改写 → 每个分镜
-      if (this.showRewriteNode && this.showStoryboardNode && this.storyboards.length > 0) {
+      // 文案改写 → 资产抽取
+      if (this.showRewriteNode && this.showAssetExtractionNode) {
+        conns.push({
+          id: 'rewrite-to-asset-extraction',
+          from: 'rewrite',
+          to: 'assetExtraction'
+        });
+      }
+
+      // 资产抽取/文案改写 → 每个分镜
+      if (this.showStoryboardNode && this.storyboards.length > 0) {
         this.storyboards.forEach((storyboard, index) => {
           conns.push({
-            id: `rewrite-to-storyboard-${index}`,
-            from: 'rewrite',
+            id: `asset-extraction-to-storyboard-${index}`,
+            from: this.showAssetExtractionNode ? 'assetExtraction' : 'rewrite',
             to: `storyboard-${index}`
           });
         });
@@ -918,6 +958,14 @@ export default {
         width: this.nodeMetrics.rewrite.width,
         height: this.nodeMetrics.rewrite.height
       };
+
+      if (this.showAssetExtractionNode) {
+        positions.assetExtraction = {
+          ...this.nodePositions.assetExtraction,
+          width: this.nodeMetrics.assetExtraction.width,
+          height: this.nodeMetrics.assetExtraction.height
+        };
+      }
 
       // 添加所有分镜及其子节点的位置
       this.storyboards.forEach((storyboard, index) => {
@@ -2224,6 +2272,7 @@ export default {
       this.isRunningPipeline = false;
       this.executingStages = {
         rewrite: false,
+        asset_extraction: false,
         storyboard: false,
         image_generation: false,
         multi_grid_image: false,
