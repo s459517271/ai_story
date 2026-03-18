@@ -186,12 +186,19 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
         vendor_keys = [item['key'] for item in response.data['results']]
         self.assertIn('gemini', vendor_keys)
         self.assertIn('grok', vendor_keys)
+        self.assertIn('newapi', vendor_keys)
         self.assertIn('deepseek', vendor_keys)
         self.assertIn('minimax', vendor_keys)
         gemini = next(item for item in response.data['results'] if item['key'] == 'gemini')
         gemini_capability_keys = [item['key'] for item in gemini['capabilities']]
         self.assertIn('text2image', gemini_capability_keys)
         self.assertIn('image2video', gemini_capability_keys)
+        openai = next(item for item in response.data['results'] if item['key'] == 'openai')
+        self.assertTrue(all(item['configurable_api_url'] for item in openai['capabilities']))
+        newapi = next(item for item in response.data['results'] if item['key'] == 'newapi')
+        newapi_capability_keys = [item['key'] for item in newapi['capabilities']]
+        self.assertIn('text2image', newapi_capability_keys)
+        self.assertIn('image2video', newapi_capability_keys)
 
     @patch('apps.models.services.requests.get')
     def test_discover_vendor_models_endpoint(self, mock_get):
@@ -245,3 +252,112 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('capability', response.data)
+
+    @patch('apps.models.services.requests.get')
+    def test_discover_vendor_models_supports_newapi_custom_url(self, mock_get):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'gpt-4o-mini'},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        response = self.client.post('/api/v1/models/providers/discover_vendor_models/', {
+            'vendor': 'newapi',
+            'capability': 'llm',
+            'api_key': 'sk-test',
+            'api_url': 'https://newapi.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['api_url'], 'https://newapi.example.com/v1/chat/completions')
+
+    def test_batch_create_vendor_models_supports_newapi_llm(self):
+        response = self.client.post('/api/v1/models/providers/batch_create_vendor_models/', {
+            'vendor': 'newapi',
+            'capability': 'llm',
+            'api_key': 'sk-test',
+            'api_url': 'https://newapi.example.com/v1/chat/completions',
+            'model_names': ['gpt-4o-mini'],
+            'is_active': True,
+            'timeout': 60,
+            'max_tokens': 4096,
+            'temperature': 0.7,
+            'top_p': 1.0,
+            'rate_limit_rpm': 60,
+            'rate_limit_rpd': 1000,
+            'priority': 0,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        provider = ModelProvider.objects.get(model_name='gpt-4o-mini')
+        self.assertEqual(provider.api_url, 'https://newapi.example.com/v1/chat/completions')
+        self.assertEqual(provider.extra_config.get('vendor'), 'newapi')
+
+
+    @patch('apps.models.services.requests.get')
+    def test_discover_vendor_models_supports_builtin_custom_url(self, mock_get):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'gpt-4.1-mini'},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        response = self.client.post('/api/v1/models/providers/discover_vendor_models/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+            'api_key': 'sk-test',
+            'api_url': 'https://gateway.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['api_url'], 'https://gateway.example.com/v1/chat/completions')
+
+    def test_batch_create_vendor_models_supports_newapi_text2image(self):
+        response = self.client.post('/api/v1/models/providers/batch_create_vendor_models/', {
+            'vendor': 'newapi',
+            'capability': 'text2image',
+            'api_key': 'sk-test',
+            'api_url': 'https://newapi.example.com/v1/images/generations',
+            'model_names': ['flux-dev'],
+            'is_active': True,
+            'timeout': 60,
+            'max_tokens': 4096,
+            'temperature': 0.7,
+            'top_p': 1.0,
+            'rate_limit_rpm': 60,
+            'rate_limit_rpd': 1000,
+            'priority': 0,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        provider = ModelProvider.objects.get(model_name='flux-dev')
+        self.assertEqual(provider.provider_type, 'text2image')
+        self.assertEqual(provider.api_url, 'https://newapi.example.com/v1/images/generations')
+
+    def test_batch_create_vendor_models_supports_newapi_image2video(self):
+        response = self.client.post('/api/v1/models/providers/batch_create_vendor_models/', {
+            'vendor': 'newapi',
+            'capability': 'image2video',
+            'api_key': 'sk-test',
+            'api_url': 'https://newapi.example.com/v1/videos/generations',
+            'model_names': ['kling-v1'],
+            'is_active': True,
+            'timeout': 60,
+            'max_tokens': 4096,
+            'temperature': 0.7,
+            'top_p': 1.0,
+            'rate_limit_rpm': 60,
+            'rate_limit_rpd': 1000,
+            'priority': 0,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        provider = ModelProvider.objects.get(model_name='kling-v1')
+        self.assertEqual(provider.provider_type, 'image2video')
+        self.assertEqual(provider.api_url, 'https://newapi.example.com/v1/videos/generations')

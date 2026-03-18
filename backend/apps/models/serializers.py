@@ -322,6 +322,7 @@ class VendorModelDiscoverySerializer(serializers.Serializer):
     vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
     capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
     api_key = serializers.CharField(required=True, trim_whitespace=True)
+    api_url = serializers.URLField(required=False, allow_blank=True)
 
     def validate_api_key(self, value):
         if not value:
@@ -333,6 +334,7 @@ class VendorModelDiscoverySerializer(serializers.Serializer):
         capabilities = vendor_config.get('capabilities', {})
         if attrs['capability'] not in capabilities:
             raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
+        capability_config = capabilities[attrs['capability']]
         return attrs
 
 
@@ -342,6 +344,7 @@ class VendorModelBatchCreateSerializer(serializers.Serializer):
     vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
     capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
     api_key = serializers.CharField(required=True, trim_whitespace=True)
+    api_url = serializers.URLField(required=False, allow_blank=True)
     model_names = serializers.ListField(
         child=serializers.CharField(trim_whitespace=True),
         allow_empty=False,
@@ -382,4 +385,5 @@ class VendorModelBatchCreateSerializer(serializers.Serializer):
         capabilities = vendor_config.get('capabilities', {})
         if attrs['capability'] not in capabilities:
             raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
+        capability_config = capabilities[attrs['capability']]
         return attrs

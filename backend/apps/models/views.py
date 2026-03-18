@@ -346,6 +346,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
                 vendor=serializer.validated_data['vendor'],
                 capability=serializer.validated_data['capability'],
                 api_key=serializer.validated_data['api_key'],
+                api_url=serializer.validated_data.get('api_url'),
             )
         except ValueError as error:
             return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)

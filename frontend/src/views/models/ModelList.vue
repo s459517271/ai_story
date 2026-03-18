@@ -12,15 +12,9 @@
       <div class="header-actions">
         <button
           class="primary-action"
-          @click="handleBatchCreate"
-        >
-          <span>批量添加厂商模型</span>
-        </button>
-        <button
-          class="secondary-outline-action"
           @click="handleCreate"
         >
-          <span>手动添加模型</span>
+          <span>添加模型</span>
         </button>
       </div>
     </div>
@@ -82,20 +76,14 @@
           暂无模型
         </div>
         <p class="empty-hint">
-          可手动创建单个模型，或通过内置厂商批量拉取并创建模型
+          可在统一页面中切换内置厂商导入或自定义厂商手动添加
         </p>
         <div class="empty-actions">
           <button
             class="primary-action"
-            @click="handleBatchCreate"
-          >
-            批量添加厂商模型
-          </button>
-          <button
-            class="secondary-outline-action"
             @click="handleCreate"
           >
-            手动添加模型
+            添加模型
           </button>
         </div>
       </div>
@@ -314,9 +302,6 @@ export default {
       this.$router.push({ name: 'model-create' })
     },
 
-    handleBatchCreate() {
-      this.$router.push({ name: 'model-batch-create' })
-    },
 
     handleEdit(provider) {
       this.$router.push({ name: 'model-edit', params: { id: provider.id } })

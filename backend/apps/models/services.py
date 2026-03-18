@@ -12,6 +12,7 @@ from django.db.models import Q, Avg, Sum
 from asgiref.sync import sync_to_async
 from .models import ModelProvider, ModelUsageLog
 from .vendor_catalog import VENDOR_CATALOG
+from urllib.parse import urlparse
 
 
 class ModelProviderService:
@@ -111,6 +112,36 @@ class ModelProviderService:
         provider = ModelProvider.objects.create(**data)
         return provider
 
+
+
+    @staticmethod
+    def _resolve_capability_config(
+        vendor: str,
+        capability: str,
+        api_url_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        vendor_config = VENDOR_CATALOG[vendor]
+        capability_config = dict(vendor_config['capabilities'][capability])
+
+        if capability_config.get('configurable_api_url') and api_url_override:
+            normalized_api_url = api_url_override.rstrip('/')
+            capability_config['api_url'] = normalized_api_url
+            path = urlparse(normalized_api_url).path.rstrip('/')
+            if path.endswith('/chat/completions'):
+                capability_config['models_endpoint'] = normalized_api_url[: -len('/chat/completions')] + '/models'
+            elif path.endswith('/images/generations'):
+                capability_config['models_endpoint'] = normalized_api_url[: -len('/images/generations')] + '/models'
+            elif path.endswith('/images/edits'):
+                capability_config['models_endpoint'] = normalized_api_url[: -len('/images/edits')] + '/models'
+            elif path.endswith('/videos/generations'):
+                capability_config['models_endpoint'] = normalized_api_url[: -len('/videos/generations')] + '/models'
+            elif path.endswith('/video/generations'):
+                capability_config['models_endpoint'] = normalized_api_url[: -len('/video/generations')] + '/models'
+            else:
+                capability_config['models_endpoint'] = normalized_api_url.rstrip('/') + '/models'
+
+        return capability_config
+
     @staticmethod
     def list_builtin_vendors() -> List[Dict[str, Any]]:
         """返回内置厂商目录。"""
@@ -122,6 +153,7 @@ class ModelProviderService:
                     'key': capability_key,
                     'provider_type': capability['provider_type'],
                     'api_url': capability['api_url'],
+                    'configurable_api_url': capability.get('configurable_api_url', False),
                 })
             vendors.append({
                 'key': key,
@@ -131,10 +163,14 @@ class ModelProviderService:
         return vendors
 
     @staticmethod
-    def discover_vendor_models(vendor: str, capability: str, api_key: str) -> Dict[str, Any]:
+    def discover_vendor_models(vendor: str, capability: str, api_key: str, api_url: Optional[str] = None) -> Dict[str, Any]:
         """从内置厂商拉取指定能力的模型列表。"""
         vendor_config = VENDOR_CATALOG[vendor]
-        capability_config = vendor_config['capabilities'][capability]
+        capability_config = ModelProviderService._resolve_capability_config(
+            vendor,
+            capability,
+            api_url_override=api_url,
+        )
         headers = {
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
@@ -191,7 +227,11 @@ class ModelProviderService:
         vendor = data['vendor']
         capability = data['capability']
         vendor_config = VENDOR_CATALOG[vendor]
-        capability_config = vendor_config['capabilities'][capability]
+        capability_config = ModelProviderService._resolve_capability_config(
+            vendor,
+            capability,
+            api_url_override=data.get('api_url'),
+        )
 
         base_payload = {
             'provider_type': capability_config['provider_type'],
