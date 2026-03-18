@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 CAPABILITY_LABELS = {
     'llm': '语言模型',
+    'vlm': '视觉语言模型',
     'text2image': '文生图',
     'image2video': '图生视频',
     'image_edit': '图片编辑',
@@ -26,6 +27,10 @@ CAPABILITY_CLASSIFICATION_PATTERNS = {
     'llm': [
         'gpt', 'o1', 'o3', 'o4', 'claude', 'qwen', 'deepseek', 'gemini', 'grok',
         'glm', 'moonshot', 'kimi', 'doubao', 'abab', 'minimax', 'llama', 'mistral',
+    ],
+    'vlm': [
+        'vision', 'vlm', 'multimodal', 'omni', 'gpt-4o', 'gemini-pro-vision', 'qwen-vl',
+        'ui-tars', 'see',
     ],
     'text2image': [
         'gpt-image', 'dall-e', 'dalle', 'flux', 'sdxl', 'stable-diffusion', 'wanx',
@@ -44,8 +49,8 @@ METADATA_CAPABILITY_MAP = {
     'chat': 'llm',
     'textgeneration': 'llm',
     'text_generation': 'llm',
-    'vlm': 'llm',
-    'multimodal': 'llm',
+    'vlm': 'vlm',
+    'multimodal': 'vlm',
     'imagegeneration': 'text2image',
     'text2image': 'text2image',
     'text_to_image': 'text2image',
@@ -276,7 +281,9 @@ class ModelProviderService:
                 return 'text2image'
             if any(keyword in normalized for keyword in ['imageedit', 'imageediting', 'img2img', 'inpaint']):
                 return 'image_edit'
-            if any(keyword in normalized for keyword in ['llm', 'chat', 'vlm', 'multimodal', 'textgeneration']):
+            if any(keyword in normalized for keyword in ['vlm', 'multimodal']):
+                return 'vlm'
+            if any(keyword in normalized for keyword in ['llm', 'chat', 'textgeneration']):
                 return 'llm'
 
         return '' if has_metadata else None

@@ -170,6 +170,27 @@ class ModelProviderVendorServiceTestCase(APITestCase):
         self.assertEqual([item['id'] for item in result['models']], ['gpt-4o-mini'])
 
     @patch('apps.models.services.requests.get')
+    def test_discover_vendor_models_classifies_vlm_separately(self, mock_get):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'doubao-1-5-vision-pro-250328', 'domain': 'VLM'},
+                {'id': 'doubao-pro-32k-241215', 'domain': 'LLM'},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        result = ModelProviderService.discover_vendor_models('volcengine', 'llm', 'sk-test')
+
+        vlm_model = next(item for item in result['models'] if item['id'] == 'doubao-1-5-vision-pro-250328')
+        llm_model = next(item for item in result['models'] if item['id'] == 'doubao-pro-32k-241215')
+        self.assertEqual(vlm_model['classified_capability'], 'vlm')
+        self.assertEqual(vlm_model['classified_capability_label'], '视觉语言模型')
+        self.assertFalse(vlm_model['is_capability_match'])
+        self.assertTrue(llm_model['is_capability_match'])
+
+    @patch('apps.models.services.requests.get')
     def test_discover_vendor_models_does_not_mark_video_as_llm_match(self, mock_get):
         mock_response = Mock()
         mock_response.status_code = 200

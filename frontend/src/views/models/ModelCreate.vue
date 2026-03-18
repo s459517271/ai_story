@@ -916,7 +916,7 @@ export default {
           count: counts[preferredKey]
         })
       }
-      ['llm', 'text2image', 'image2video', 'image_edit'].forEach((key) => {
+      ['llm', 'vlm', 'text2image', 'image2video', 'image_edit'].forEach((key) => {
         if (!counts[key] || key === preferredKey) {
           return
         }
@@ -1008,7 +1008,8 @@ export default {
 
     getProviderTypeLabel(type) {
       const labels = {
-        llm: 'LLM',
+        llm: '语言模型',
+        vlm: '视觉语言模型',
         text2image: '文生图',
         image2video: '图生视频',
         image_edit: '图片编辑'
