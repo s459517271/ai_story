@@ -169,6 +169,12 @@ const routes = [
         meta: { title: '添加模型' },
       },
       {
+        path: 'batch-create',
+        name: 'model-batch-create',
+        component: () => import('@/views/models/VendorBatchForm.vue'),
+        meta: { title: '批量添加厂商模型' },
+      },
+      {
         path: ':id/edit',
         name: 'model-edit',
         component: () => import('@/views/models/ModelForm.vue'),

@@ -1,0 +1,209 @@
+"""内置模型厂商目录与模型发现工具。"""
+
+from typing import Any, Dict
+
+
+VENDOR_CATALOG: Dict[str, Dict[str, Any]] = {
+    'openai': {
+        'label': 'OpenAI',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.openai.com/v1/chat/completions',
+                'models_endpoint': 'https://api.openai.com/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['gpt', 'o1', 'o3', 'o4'],
+                'recommended_patterns': ['gpt-4.1', 'gpt-4o', 'o3', 'o1'],
+            },
+            'text2image': {
+                'provider_type': 'text2image',
+                'api_url': 'https://api.openai.com/v1/images/generations',
+                'models_endpoint': 'https://api.openai.com/v1/models',
+                'executor_class': 'core.ai_client.text2image_client.Text2ImageClient',
+                'model_filter': ['gpt-image', 'dall-e'],
+                'recommended_patterns': ['gpt-image-1', 'dall-e-3'],
+            },
+            'image_edit': {
+                'provider_type': 'image_edit',
+                'api_url': 'https://api.openai.com/v1/images/edits',
+                'models_endpoint': 'https://api.openai.com/v1/models',
+                'executor_class': 'core.ai_client.image_edit_client.ImageEditClient',
+                'model_filter': ['gpt-image', 'dall-e'],
+                'recommended_patterns': ['gpt-image-1'],
+            },
+        },
+    },
+    'volcengine': {
+        'label': '火山引擎',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+                'models_endpoint': 'https://ark.cn-beijing.volces.com/api/v3/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'recommended_patterns': ['doubao', 'deepseek', 'seed'],
+            },
+            'text2image': {
+                'provider_type': 'text2image',
+                'api_url': 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+                'models_endpoint': 'https://ark.cn-beijing.volces.com/api/v3/models',
+                'executor_class': 'core.ai_client.text2image_client.Text2ImageClient',
+                'recommended_patterns': ['seedream', 'doubao'],
+            },
+            'image_edit': {
+                'provider_type': 'image_edit',
+                'api_url': 'https://ark.cn-beijing.volces.com/api/v3/images/edits',
+                'models_endpoint': 'https://ark.cn-beijing.volces.com/api/v3/models',
+                'executor_class': 'core.ai_client.image_edit_client.ImageEditClient',
+                'model_filter': ['edit'],
+                'recommended_patterns': ['edit'],
+            },
+            'image2video': {
+                'provider_type': 'image2video',
+                'api_url': 'https://ark.cn-beijing.volces.com/api/v3/videos/generations',
+                'models_endpoint': 'https://ark.cn-beijing.volces.com/api/v3/models',
+                'executor_class': 'core.ai_client.image2video_client.VideoGeneratorClient',
+                'model_filter': ['video', 'seedance'],
+                'recommended_patterns': ['seedance', 'video'],
+            },
+        },
+    },
+    'gemini': {
+        'label': 'Gemini',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+                'models_endpoint': 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['gemini'],
+                'recommended_patterns': ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro'],
+            },
+            'text2image': {
+                'provider_type': 'text2image',
+                'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/images/generations',
+                'models_endpoint': 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+                'executor_class': 'core.ai_client.text2image_client.Text2ImageClient',
+                'model_filter': ['imagen', 'gemini'],
+                'recommended_patterns': ['imagen-3'],
+            },
+            'image2video': {
+                'provider_type': 'image2video',
+                'api_url': 'https://generativelanguage.googleapis.com/v1beta/openai/videos/generations',
+                'models_endpoint': 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+                'executor_class': 'core.ai_client.image2video_client.VideoGeneratorClient',
+                'model_filter': ['veo', 'gemini'],
+                'recommended_patterns': ['veo-3', 'veo-2'],
+            },
+        },
+    },
+    'grok': {
+        'label': 'Grok',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.x.ai/v1/chat/completions',
+                'models_endpoint': 'https://api.x.ai/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['grok'],
+                'recommended_patterns': ['grok-2', 'grok-beta'],
+            },
+        },
+    },
+    'deepseek': {
+        'label': 'DeepSeek',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.deepseek.com/chat/completions',
+                'models_endpoint': 'https://api.deepseek.com/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['deepseek'],
+                'recommended_patterns': ['deepseek-chat', 'deepseek-reasoner'],
+            },
+        },
+    },
+    'minimax': {
+        'label': 'MiniMax',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.minimax.chat/v1/text/chatcompletion_v2',
+                'models_endpoint': 'https://api.minimax.chat/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['minimax', 'abab'],
+                'recommended_patterns': ['minimax', 'abab'],
+            },
+        },
+    },
+    'siliconflow': {
+        'label': '硅基流动',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.siliconflow.cn/v1/chat/completions',
+                'models_endpoint': 'https://api.siliconflow.cn/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'recommended_patterns': ['deepseek', 'qwen', 'glm', 'kimi'],
+            },
+        },
+    },
+    'openrouter': {
+        'label': 'OpenRouter',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://openrouter.ai/api/v1/chat/completions',
+                'models_endpoint': 'https://openrouter.ai/api/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'recommended_patterns': ['grok', 'deepseek', 'qwen', 'claude', 'gemini'],
+            },
+        },
+    },
+    'zhipu': {
+        'label': '智谱 AI',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+                'models_endpoint': 'https://open.bigmodel.cn/api/paas/v4/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['glm'],
+                'recommended_patterns': ['glm-4', 'glm-4.5'],
+            },
+        },
+    },
+    'dashscope': {
+        'label': '阿里云百炼',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+                'models_endpoint': 'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['qwen'],
+                'recommended_patterns': ['qwen-plus', 'qwen-max', 'qwen-turbo'],
+            },
+            'text2image': {
+                'provider_type': 'text2image',
+                'api_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations',
+                'models_endpoint': 'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
+                'executor_class': 'core.ai_client.text2image_client.Text2ImageClient',
+                'recommended_patterns': ['wanx'],
+            },
+        },
+    },
+    'moonshot': {
+        'label': 'Moonshot',
+        'capabilities': {
+            'llm': {
+                'provider_type': 'llm',
+                'api_url': 'https://api.moonshot.cn/v1/chat/completions',
+                'models_endpoint': 'https://api.moonshot.cn/v1/models',
+                'executor_class': 'core.ai_client.openai_client.OpenAIClient',
+                'model_filter': ['moonshot', 'kimi'],
+                'recommended_patterns': ['moonshot-v1', 'kimi'],
+            },
+        },
+    },
+}

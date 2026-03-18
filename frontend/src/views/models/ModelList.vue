@@ -9,25 +9,20 @@
           管理模型提供商与运行状态
         </p>
       </div>
-      <button
-        class="primary-action"
-        @click="handleCreate"
-      >
-        <svg
-          class="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+      <div class="header-actions">
+        <button
+          class="primary-action"
+          @click="handleBatchCreate"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
-        <span>添加模型</span>
-      </button>
+          <span>批量添加厂商模型</span>
+        </button>
+        <button
+          class="secondary-outline-action"
+          @click="handleCreate"
+        >
+          <span>手动添加模型</span>
+        </button>
+      </div>
     </div>
 
     <div class="filter-card">
@@ -83,31 +78,26 @@
         v-if="providers.length === 0"
         class="empty-state"
       >
-        <svg
-          class="empty-icon"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-          />
-        </svg>
-        <p class="empty-text">
+        <div class="empty-hero">
           暂无模型
-        </p>
+        </div>
         <p class="empty-hint">
-          添加模型提供商后即可在项目中使用
+          可手动创建单个模型，或通过内置厂商批量拉取并创建模型
         </p>
-        <button
-          class="secondary-action"
-          @click="handleCreate"
-        >
-          添加模型
-        </button>
+        <div class="empty-actions">
+          <button
+            class="primary-action"
+            @click="handleBatchCreate"
+          >
+            批量添加厂商模型
+          </button>
+          <button
+            class="secondary-outline-action"
+            @click="handleCreate"
+          >
+            手动添加模型
+          </button>
+        </div>
       </div>
 
       <div
@@ -120,12 +110,12 @@
           class="data-card"
           @click="handleEdit(provider)"
         >
-          <div class="card-header">
-            <div>
+          <div class="card-top">
+            <div class="card-main">
               <h3 class="card-title">
                 {{ provider.name }}
               </h3>
-              <p class="card-subtitle">
+              <p class="card-desc">
                 {{ provider.model_name }}
               </p>
             </div>
@@ -137,12 +127,8 @@
             </span>
           </div>
 
-          <div class="card-body">
-            <div class="meta-row">
-              <span class="meta-label">优先级</span>
-              <span class="meta-value">{{ provider.priority }}</span>
-            </div>
-            <div class="meta-row">
+          <div class="card-meta compact-meta">
+            <div class="meta-item">
               <span class="meta-label">状态</span>
               <span
                 class="badge badge-sm"
@@ -151,41 +137,43 @@
                 {{ provider.is_active ? '已激活' : '未激活' }}
               </span>
             </div>
-            <div class="meta-row">
-              <span class="meta-label">使用次数</span>
-              <div class="usage-cell">
-                <span>总计: {{ provider.total_usage_count || 0 }}</span>
-                <span class="muted">近7天: {{ provider.recent_usage_count || 0 }}</span>
-              </div>
+            <div class="meta-item meta-item-right">
+              <span class="meta-label">更新</span>
+              <span class="meta-value meta-time">{{ formatDate(provider.updated_at) }}</span>
             </div>
           </div>
 
-          <div class="card-actions">
-            <button
-              class="ghost-action"
-              :class="{ 'is-loading': testingProviderId === provider.id }"
-              :disabled="!provider.is_active || testingProviderId !== null"
-              @click.stop="handleTest(provider)"
+          <div class="card-footer">
+            <div
+              class="card-actions"
+              @click.stop
             >
-              <span
-                v-if="testingProviderId === provider.id"
-                class="action-spinner"
-                aria-hidden="true"
-              />
-              <span>{{ testingProviderId === provider.id ? '测试中...' : '测试' }}</span>
-            </button>
-            <button
-              class="ghost-action"
-              @click.stop="handleToggleStatus(provider)"
-            >
-              {{ provider.is_active ? '停用' : '启用' }}
-            </button>
-            <button
-              class="ghost-action danger"
-              @click.stop="handleDelete(provider)"
-            >
-              删除
-            </button>
+              <button
+                class="ghost-action"
+                :class="{ 'is-loading': testingProviderId === provider.id }"
+                :disabled="!provider.is_active || testingProviderId !== null"
+                @click.stop="handleTest(provider)"
+              >
+                <span
+                  v-if="testingProviderId === provider.id"
+                  class="action-spinner"
+                  aria-hidden="true"
+                />
+                <span>{{ testingProviderId === provider.id ? '测试中...' : '测试' }}</span>
+              </button>
+              <button
+                class="ghost-action"
+                @click.stop="handleToggleStatus(provider)"
+              >
+                {{ provider.is_active ? '停用' : '启用' }}
+              </button>
+              <button
+                class="ghost-action danger"
+                @click.stop="handleDelete(provider)"
+              >
+                删除
+              </button>
+            </div>
           </div>
         </article>
       </div>
@@ -326,6 +314,10 @@ export default {
       this.$router.push({ name: 'model-create' })
     },
 
+    handleBatchCreate() {
+      this.$router.push({ name: 'model-batch-create' })
+    },
+
     handleEdit(provider) {
       this.$router.push({ name: 'model-edit', params: { id: provider.id } })
     },
@@ -385,6 +377,17 @@ export default {
       }
     },
 
+    formatDate(value) {
+      if (!value) {
+        return '--'
+      }
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) {
+        return '--'
+      }
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    },
+
     getProviderTypeLabel(type) {
       const labels = {
         llm: 'LLM',
@@ -441,25 +444,45 @@ export default {
   letter-spacing: -0.02em;
 }
 
+.layout-shell.theme-dark .page-title {
+  color: #e2e8f0;
+}
+
 .page-subtitle {
   font-size: 0.95rem;
   color: #64748b;
   margin: 0;
 }
 
-.primary-action {
+.layout-shell.theme-dark .page-subtitle {
+  color: #94a3b8;
+}
+
+.header-actions {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primary-action,
+.secondary-outline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #ffffff;
-  color: #0f172a;
   font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.primary-action {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .layout-shell.theme-dark .primary-action {
@@ -468,19 +491,29 @@ export default {
   color: #e2e8f0;
 }
 
-.primary-action:hover {
+.primary-action:hover,
+.secondary-outline-action:hover {
   border-color: rgba(20, 184, 166, 0.6);
   box-shadow: 0 12px 24px rgba(20, 184, 166, 0.18);
   transform: translateY(-1px);
 }
 
-.layout-shell.theme-dark .primary-action:hover {
+.layout-shell.theme-dark .primary-action:hover,
+.layout-shell.theme-dark .secondary-outline-action:hover {
   border-color: rgba(94, 234, 212, 0.6);
   box-shadow: 0 12px 24px rgba(2, 6, 23, 0.55);
 }
 
-.primary-action:active {
-  transform: translateY(0);
+.secondary-outline-action {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.86);
+  color: #334155;
+}
+
+.layout-shell.theme-dark .secondary-outline-action {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
 }
 
 .filter-card {
@@ -520,19 +553,16 @@ export default {
   pointer-events: none;
 }
 
-.layout-shell.theme-dark .search-icon {
-  color: #94a3b8;
-}
-
 .search-input {
   width: 100%;
-  padding: 0.875rem 1rem 0.875rem 3rem;
-  border-radius: 14px;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
   font-size: 0.95rem;
-  outline: none;
   transition: all 0.2s ease;
+  outline: none;
 }
 
 .layout-shell.theme-dark .search-input {
@@ -603,97 +633,57 @@ export default {
 
 .card-grid {
   display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-}
-
-@media (min-width: 640px) {
-  .card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 768px) {
-  .card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1024px) {
-  .card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1280px) {
-  .card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1536px) {
-  .card-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
 }
 
 .data-card {
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.7) 0%, rgba(14, 165, 233, 0.7) 100%) 0 0 / 0 3px no-repeat,
+    rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  padding: 1rem 1rem 0.9rem;
   border: 1px solid rgba(148, 163, 184, 0.2);
-  padding: 1.5rem;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.9rem;
   min-width: 0;
-  position: relative;
-  overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
 .layout-shell.theme-dark .data-card {
-  background: rgba(15, 23, 42, 0.92);
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.5) 0%, rgba(56, 189, 248, 0.5) 100%) 0 0 / 0 3px no-repeat,
+    rgba(15, 23, 42, 0.92);
   border-color: rgba(148, 163, 184, 0.2);
-}
-
-.data-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(20, 184, 166, 0.7) 0%, rgba(14, 165, 233, 0.7) 100%);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.3s ease;
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.55);
 }
 
 .data-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
   border-color: rgba(148, 163, 184, 0.35);
+  background-size: 100% 3px, auto;
 }
 
 .layout-shell.theme-dark .data-card:hover {
   box-shadow: 0 18px 36px rgba(2, 6, 23, 0.6);
 }
 
-.data-card:hover::before {
-  transform: scaleX(1);
-}
-
-.card-header {
+.card-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.card-main {
+  min-width: 0;
 }
 
 .card-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #0f172a;
 }
@@ -702,51 +692,70 @@ export default {
   color: #e2e8f0;
 }
 
-.card-subtitle {
+.card-desc {
   margin: 0.35rem 0 0;
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   word-break: break-all;
   overflow-wrap: anywhere;
 }
 
-.layout-shell.theme-dark .card-subtitle {
+.layout-shell.theme-dark .card-desc {
   color: #94a3b8;
 }
 
-.card-body {
+.card-meta {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 14px;
+  padding: 0.7rem 0.85rem;
 }
 
-.meta-row {
+.layout-shell.theme-dark .card-meta {
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.meta-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.meta-item-right {
+  align-items: flex-end;
 }
 
 .meta-label {
+  font-size: 0.75rem;
   color: #94a3b8;
-  font-size: 0.8rem;
 }
 
 .meta-value {
-  font-weight: 600;
+  font-size: 0.9rem;
   color: #0f172a;
+  font-weight: 600;
 }
 
 .layout-shell.theme-dark .meta-value {
   color: #e2e8f0;
 }
 
-.usage-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
+.meta-time {
   font-size: 0.8rem;
-  text-align: right;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .badge {
@@ -801,16 +810,14 @@ export default {
   color: #7dd3fc;
 }
 
-.card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+.badge-secondary {
+  background: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.28);
+  color: #7c3aed;
 }
 
-.data-card:hover .card-actions {
-  opacity: 1;
+.layout-shell.theme-dark .badge-secondary {
+  color: #c4b5fd;
 }
 
 .ghost-action {
@@ -855,7 +862,6 @@ export default {
 .ghost-action.danger:hover {
   border-color: rgba(248, 113, 113, 0.35);
   background: rgba(248, 113, 113, 0.12);
-  color: #dc2626;
 }
 
 .ghost-action.is-loading {
@@ -889,65 +895,30 @@ export default {
 }
 
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   text-align: center;
-  padding: 6rem 2rem;
+  padding: 4rem 1rem;
 }
 
-.empty-icon {
-  width: 4rem;
-  height: 4rem;
-  color: #cbd5e1;
-  margin-bottom: 1.5rem;
-}
-
-.layout-shell.theme-dark .empty-icon {
-  color: #475569;
-}
-
-.empty-text {
-  font-size: 1.25rem;
+.empty-hero {
+  font-size: 1.3rem;
   font-weight: 600;
   color: #0f172a;
-  margin: 0 0 0.5rem 0;
 }
 
-.layout-shell.theme-dark .empty-text {
+.layout-shell.theme-dark .empty-hero {
   color: #e2e8f0;
 }
 
 .empty-hint {
   color: #94a3b8;
-  margin: 0 0 2rem 0;
+  margin: 0.6rem 0 1.6rem;
 }
 
-.secondary-action {
-  padding: 0.875rem 2rem;
-  border-radius: 999px;
-  background: #0f172a;
-  color: #ffffff;
-  border: none;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.layout-shell.theme-dark .secondary-action {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.secondary-action:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
-}
-
-.muted {
-  color: #94a3b8;
+.empty-actions {
+  display: inline-flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {
@@ -955,19 +926,31 @@ export default {
     padding: 2rem 1.5rem;
   }
 
-  .page-title {
-    font-size: 2rem;
-  }
-
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 1.5rem;
   }
 
-  .primary-action {
+  .header-actions,
+  .empty-actions {
     width: 100%;
-    justify-content: center;
+  }
+
+  .primary-action,
+  .secondary-outline-action {
+    width: 100%;
+  }
+
+  .card-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-item-right {
+    align-items: flex-start;
+  }
+
+  .card-footer {
+    justify-content: flex-start;
   }
 }
 </style>

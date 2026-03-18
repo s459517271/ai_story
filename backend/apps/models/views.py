@@ -22,6 +22,8 @@ from .serializers import (
     ModelUsageLogSerializer,
     ModelProviderTestSerializer,
     ModelProviderSimpleSerializer,
+    VendorModelDiscoverySerializer,
+    VendorModelBatchCreateSerializer,
 )
 from .services import ModelProviderService, ModelUsageLogService
 
@@ -323,6 +325,53 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
             ]
 
         return Response(all_executors)
+
+    @action(detail=False, methods=['get'])
+    def builtin_vendors(self, request):
+        """获取内置厂商目录。"""
+        vendors = ModelProviderService.list_builtin_vendors()
+        return Response({
+            'count': len(vendors),
+            'results': vendors,
+        })
+
+    @action(detail=False, methods=['post'])
+    def discover_vendor_models(self, request):
+        """根据厂商和 API Key 拉取模型列表。"""
+        serializer = VendorModelDiscoverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            result = ModelProviderService.discover_vendor_models(
+                vendor=serializer.validated_data['vendor'],
+                capability=serializer.validated_data['capability'],
+                api_key=serializer.validated_data['api_key'],
+            )
+        except ValueError as error:
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            return Response({'error': f'获取厂商模型失败: {error}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result)
+
+    @action(detail=False, methods=['post'])
+    def batch_create_vendor_models(self, request):
+        """批量创建厂商模型。"""
+        serializer = VendorModelBatchCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = ModelProviderService.batch_create_vendor_models(serializer.validated_data)
+
+        return Response({
+            'vendor': result['vendor'],
+            'vendor_label': result['vendor_label'],
+            'capability': result['capability'],
+            'provider_type': result['provider_type'],
+            'created_count': result['created_count'],
+            'skipped_count': result['skipped_count'],
+            'created': ModelProviderDetailSerializer(result['created'], many=True).data,
+            'skipped': result['skipped'],
+        }, status=status.HTTP_201_CREATED)
 
 
 class ModelUsageLogViewSet(viewsets.ReadOnlyModelViewSet):

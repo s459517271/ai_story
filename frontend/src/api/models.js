@@ -152,6 +152,18 @@ export const modelProviderApi = {
   getExecutorChoices(providerType = null) {
     const params = providerType ? { provider_type: providerType } : {}
     return apiClient.get('/models/providers/executor_choices/', { params })
+  },
+
+  getBuiltinVendors() {
+    return apiClient.get('/models/providers/builtin_vendors/')
+  },
+
+  discoverVendorModels(data) {
+    return apiClient.post('/models/providers/discover_vendor_models/', data)
+  },
+
+  batchCreateVendorModels(data) {
+    return apiClient.post('/models/providers/batch_create_vendor_models/', data)
   }
 }
 

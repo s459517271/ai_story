@@ -6,6 +6,7 @@
 
 from rest_framework import serializers
 from .models import ModelProvider, ModelUsageLog
+from .vendor_catalog import VENDOR_CATALOG
 
 
 class ModelProviderListSerializer(serializers.ModelSerializer):
@@ -312,4 +313,73 @@ class ModelProviderTestSerializer(serializers.Serializer):
             raise serializers.ValidationError("模型提供商未激活")
 
         attrs['provider'] = provider
+        return attrs
+
+
+class VendorModelDiscoverySerializer(serializers.Serializer):
+    """厂商模型发现请求。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+    api_key = serializers.CharField(required=True, trim_whitespace=True)
+
+    def validate_api_key(self, value):
+        if not value:
+            raise serializers.ValidationError('API Key不能为空')
+        return value
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
+        return attrs
+
+
+class VendorModelBatchCreateSerializer(serializers.Serializer):
+    """厂商模型批量创建请求。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+    api_key = serializers.CharField(required=True, trim_whitespace=True)
+    model_names = serializers.ListField(
+        child=serializers.CharField(trim_whitespace=True),
+        allow_empty=False,
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+    timeout = serializers.IntegerField(required=False, min_value=1, max_value=600, default=60)
+    max_tokens = serializers.IntegerField(required=False, min_value=1, default=4096)
+    temperature = serializers.FloatField(required=False, min_value=0, max_value=2, default=0.7)
+    top_p = serializers.FloatField(required=False, min_value=0, max_value=1, default=1.0)
+    rate_limit_rpm = serializers.IntegerField(required=False, min_value=1, default=60)
+    rate_limit_rpd = serializers.IntegerField(required=False, min_value=1, default=1000)
+    priority = serializers.IntegerField(required=False, min_value=0, default=0)
+
+    def validate_api_key(self, value):
+        if not value:
+            raise serializers.ValidationError('API Key不能为空')
+        return value
+
+    def validate_model_names(self, value):
+        cleaned_names = []
+        seen = set()
+        for item in value:
+            model_name = item.strip()
+            if not model_name:
+                continue
+            if model_name in seen:
+                continue
+            seen.add(model_name)
+            cleaned_names.append(model_name)
+
+        if not cleaned_names:
+            raise serializers.ValidationError('至少选择一个模型')
+
+        return cleaned_names
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
         return attrs

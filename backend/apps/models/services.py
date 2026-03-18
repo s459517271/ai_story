@@ -5,11 +5,13 @@
 """
 
 import inspect
+import requests
 from typing import Dict, Any, Optional, List
 from django.db import transaction
 from django.db.models import Q, Avg, Sum
 from asgiref.sync import sync_to_async
 from .models import ModelProvider, ModelUsageLog
+from .vendor_catalog import VENDOR_CATALOG
 
 
 class ModelProviderService:
@@ -108,6 +110,145 @@ class ModelProviderService:
         """
         provider = ModelProvider.objects.create(**data)
         return provider
+
+    @staticmethod
+    def list_builtin_vendors() -> List[Dict[str, Any]]:
+        """返回内置厂商目录。"""
+        vendors = []
+        for key, config in VENDOR_CATALOG.items():
+            capabilities = []
+            for capability_key, capability in config.get('capabilities', {}).items():
+                capabilities.append({
+                    'key': capability_key,
+                    'provider_type': capability['provider_type'],
+                    'api_url': capability['api_url'],
+                })
+            vendors.append({
+                'key': key,
+                'label': config['label'],
+                'capabilities': capabilities,
+            })
+        return vendors
+
+    @staticmethod
+    def discover_vendor_models(vendor: str, capability: str, api_key: str) -> Dict[str, Any]:
+        """从内置厂商拉取指定能力的模型列表。"""
+        vendor_config = VENDOR_CATALOG[vendor]
+        capability_config = vendor_config['capabilities'][capability]
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }
+
+        response = requests.get(
+            capability_config['models_endpoint'],
+            headers=headers,
+            timeout=20,
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f'拉取模型列表失败: {response.status_code} - {response.text}')
+
+        payload = response.json()
+        models_data = payload.get('data', payload if isinstance(payload, list) else [])
+
+        filtered_models = []
+        filters = [item.lower() for item in capability_config.get('model_filter', [])]
+        recommended_patterns = [item.lower() for item in capability_config.get('recommended_patterns', [])]
+        for item in models_data:
+            model_id = str(item.get('id') or item.get('name') or '').strip()
+            if not model_id:
+                continue
+
+            model_key = model_id.lower()
+            if filters and not any(keyword in model_key for keyword in filters):
+                continue
+
+            is_recommended = any(keyword in model_key for keyword in recommended_patterns) if recommended_patterns else False
+            filtered_models.append({
+                'id': model_id,
+                'name': item.get('name') or model_id,
+                'owned_by': item.get('owned_by') or item.get('provider') or '',
+                'context_length': item.get('context_length') or item.get('context_window') or None,
+                'is_recommended': is_recommended,
+            })
+
+        filtered_models.sort(key=lambda item: (not item['is_recommended'], item['id']))
+
+        return {
+            'vendor': vendor,
+            'vendor_label': vendor_config['label'],
+            'capability': capability,
+            'provider_type': capability_config['provider_type'],
+            'api_url': capability_config['api_url'],
+            'models': filtered_models,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def batch_create_vendor_models(data: Dict[str, Any]) -> Dict[str, Any]:
+        """批量创建内置厂商模型。"""
+        vendor = data['vendor']
+        capability = data['capability']
+        vendor_config = VENDOR_CATALOG[vendor]
+        capability_config = vendor_config['capabilities'][capability]
+
+        base_payload = {
+            'provider_type': capability_config['provider_type'],
+            'api_url': capability_config['api_url'],
+            'api_key': data['api_key'],
+            'executor_class': capability_config['executor_class'],
+            'max_tokens': data.get('max_tokens', 4096),
+            'temperature': data.get('temperature', 0.7),
+            'top_p': data.get('top_p', 1.0),
+            'timeout': data.get('timeout', 60),
+            'is_active': data.get('is_active', True),
+            'priority': data.get('priority', 0),
+            'rate_limit_rpm': data.get('rate_limit_rpm', 60),
+            'rate_limit_rpd': data.get('rate_limit_rpd', 1000),
+            'extra_config': {
+                'vendor': vendor,
+                'vendor_label': vendor_config['label'],
+                'vendor_capability': capability,
+            },
+        }
+
+        created = []
+        skipped = []
+
+        for model_name in data['model_names']:
+            existing = ModelProvider.objects.filter(
+                provider_type=capability_config['provider_type'],
+                api_url=capability_config['api_url'],
+                model_name=model_name,
+            ).first()
+
+            if existing:
+                skipped.append({
+                    'id': str(existing.id),
+                    'name': existing.name,
+                    'model_name': existing.model_name,
+                    'reason': '模型已存在',
+                })
+                continue
+
+            provider = ModelProvider.objects.create(
+                name=f"{vendor_config['label']} / {model_name}",
+                model_name=model_name,
+                **base_payload,
+            )
+            created.append(provider)
+
+        return {
+            'vendor': vendor,
+            'vendor_label': vendor_config['label'],
+            'capability': capability,
+            'provider_type': capability_config['provider_type'],
+            'created_count': len(created),
+            'skipped_count': len(skipped),
+            'created': created,
+            'skipped': skipped,
+        }
 
     @staticmethod
     @transaction.atomic

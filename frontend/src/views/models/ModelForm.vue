@@ -1,33 +1,60 @@
 <template>
-  <div class="model-form">
-    <page-card :title="isEdit ? '编辑模型' : '添加模型'">
-      <loading-container :loading="loading">
-        <form
-          class="space-y-6"
-          @submit.prevent="handleSubmit"
+  <div class="page-shell model-form">
+    <div class="page-header">
+      <div class="page-header-main">
+        <h1 class="page-title">
+          {{ isEdit ? '编辑模型' : '添加模型' }}
+        </h1>
+        <p class="page-subtitle">
+          {{ isEdit ? '更新模型配置与运行参数' : '创建单个模型提供商，适用于自定义地址或手动维护' }}
+        </p>
+      </div>
+      <div class="header-actions">
+        <button
+          class="secondary-outline-action"
+          :disabled="submitting"
+          @click="handleCancel"
         >
-          <!-- 基本信息 -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">模型别名 <span class="text-error">*</span></span>
-              </label>
+          返回列表
+        </button>
+      </div>
+    </div>
+
+    <loading-container :loading="loading">
+      <form
+        class="form-layout"
+        @submit.prevent="handleSubmit"
+      >
+        <section class="panel-card">
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                基础信息
+              </h2>
+              <p class="card-desc">
+                配置模型名称、类型、执行器与访问地址
+              </p>
+            </div>
+            <span class="pill">必填优先</span>
+          </div>
+
+          <div class="form-grid">
+            <label class="field-block">
+              <span class="field-label">模型别名 <em>*</em></span>
               <input
                 v-model="formData.name"
                 type="text"
                 placeholder="例如: OpenAI GPT-4"
-                class="input input-bordered"
+                class="field-input"
                 required
               >
-            </div>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">模型类型 <span class="text-error">*</span></span>
-              </label>
+            <label class="field-block">
+              <span class="field-label">模型类型 <em>*</em></span>
               <select
                 v-model="formData.provider_type"
-                class="select select-bordered"
+                class="field-input"
                 required
                 :disabled="isEdit"
                 @change="handleProviderTypeChange"
@@ -48,15 +75,13 @@
                   图片编辑模型
                 </option>
               </select>
-            </div>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">执行器类 <span class="text-error">*</span></span>
-              </label>
+            <label class="field-block">
+              <span class="field-label">执行器类 <em>*</em></span>
               <select
                 v-model="formData.executor_class"
-                class="select select-bordered"
+                class="field-input"
                 required
                 :disabled="!formData.provider_type || loadingExecutors"
               >
@@ -71,356 +96,339 @@
                   {{ executor.label }}
                 </option>
               </select>
-              <label class="label">
-                <span class="label-text-alt text-base-content/60">
-                  选择该模型使用的执行器类
-                </span>
-              </label>
-            </div>
-          </div>
+              <span class="field-hint">选择该模型使用的执行器类</span>
+            </label>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">API地址 <span class="text-error">*</span></span>
-              </label>
+            <label class="field-block field-block-wide">
+              <span class="field-label">API地址 <em>*</em></span>
               <input
                 v-model="formData.api_url"
                 type="url"
                 placeholder="https://api.openai.com/v1/chat/completions"
-                class="input input-bordered"
+                class="field-input"
                 required
               >
-            </div>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">模型名称 <span class="text-error">*</span></span>
-              </label>
+            <label class="field-block">
+              <span class="field-label">模型名称 <em>*</em></span>
               <input
                 v-model="formData.model_name"
                 type="text"
                 placeholder="例如: gpt-4-turbo-preview"
-                class="input input-bordered"
+                class="field-input"
                 required
               >
-            </div>
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">API密钥 <span class="text-error">*</span></span>
             </label>
-            <input
-              v-model="formData.api_key"
-              type="text"
-              placeholder="sk-..."
-              class="input input-bordered"
-              required
-            >
+
+            <label class="field-block">
+              <span class="field-label">API密钥 <em>*</em></span>
+              <input
+                v-model="formData.api_key"
+                type="text"
+                placeholder="sk-..."
+                class="field-input"
+                required
+              >
+            </label>
           </div>
+        </section>
 
-          <!-- LLM专用参数 -->
-          <div
-            v-if="formData.provider_type === 'llm'"
-            class="space-y-4"
-          >
-            <div class="divider">
-              LLM参数配置
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">最大Token数</span>
-                </label>
-                <input
-                  v-model.number="formData.max_tokens"
-                  type="number"
-                  min="1"
-                  max="128000"
-                  class="input input-bordered"
-                >
-              </div>
-
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">温度 (0-2)</span>
-                </label>
-                <input
-                  v-model.number="formData.temperature"
-                  type="number"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  class="input input-bordered"
-                >
-              </div>
-
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">Top P (0-1)</span>
-                </label>
-                <input
-                  v-model.number="formData.top_p"
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="input input-bordered"
-                >
-              </div>
+        <section
+          v-if="formData.provider_type === 'llm'"
+          class="panel-card"
+        >
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                LLM 参数配置
+              </h2>
+              <p class="card-desc">
+                控制文本生成的采样和长度
+              </p>
             </div>
           </div>
 
-          <!-- 文生图参数 -->
-          <div
-            v-if="formData.provider_type === 'text2image'"
-            class="space-y-4"
-          >
-            <div class="divider">
-              文生图参数配置
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认宽度</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.width"
-                  type="number"
-                  min="256"
-                  max="10240"
-                  step="32"
-                  class="input input-bordered"
-                  placeholder="1024"
-                >
-              </div>
+          <div class="form-grid form-grid-3">
+            <label class="field-block">
+              <span class="field-label">最大Token数</span>
+              <input
+                v-model.number="formData.max_tokens"
+                type="number"
+                min="1"
+                max="128000"
+                class="field-input"
+              >
+            </label>
 
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认高度</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.height"
-                  type="number"
-                  min="256"
-                  max="10240"
-                  step="32"
-                  class="input input-bordered"
-                  placeholder="1024"
-                >
-              </div>
+            <label class="field-block">
+              <span class="field-label">温度 (0-2)</span>
+              <input
+                v-model.number="formData.temperature"
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                class="field-input"
+              >
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">Top P (0-1)</span>
+              <input
+                v-model.number="formData.top_p"
+                type="number"
+                min="0"
+                max="1"
+                step="0.1"
+                class="field-input"
+              >
+            </label>
+          </div>
+        </section>
+
+        <section
+          v-if="formData.provider_type === 'text2image'"
+          class="panel-card"
+        >
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                文生图参数配置
+              </h2>
+              <p class="card-desc">
+                设置默认输出尺寸
+              </p>
             </div>
           </div>
 
-          <!-- 图生视频参数 -->
-          <div
-            v-if="formData.provider_type === 'image2video'"
-            class="space-y-4"
-          >
-            <div class="divider">
-              图生视频参数配置
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认FPS</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.fps"
-                  type="number"
-                  min="12"
-                  max="60"
-                  class="input input-bordered"
-                  placeholder="24"
-                >
-              </div>
+          <div class="form-grid">
+            <label class="field-block">
+              <span class="field-label">默认宽度</span>
+              <input
+                v-model.number="extraConfig.width"
+                type="number"
+                min="256"
+                max="10240"
+                step="32"
+                class="field-input"
+                placeholder="1024"
+              >
+            </label>
 
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认时长(秒)</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.duration"
-                  type="number"
-                  min="1"
-                  max="30"
-                  class="input input-bordered"
-                  placeholder="5"
-                >
-              </div>
+            <label class="field-block">
+              <span class="field-label">默认高度</span>
+              <input
+                v-model.number="extraConfig.height"
+                type="number"
+                min="256"
+                max="10240"
+                step="32"
+                class="field-input"
+                placeholder="1024"
+              >
+            </label>
+          </div>
+        </section>
+
+        <section
+          v-if="formData.provider_type === 'image2video'"
+          class="panel-card"
+        >
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                图生视频参数配置
+              </h2>
+              <p class="card-desc">
+                设置默认帧率与时长
+              </p>
             </div>
           </div>
 
-          <!-- 图片编辑参数 -->
-          <div
-            v-if="formData.provider_type === 'image_edit'"
-            class="space-y-4"
-          >
-            <div class="divider">
-              图片编辑参数配置
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认宽度</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.width"
-                  type="number"
-                  min="256"
-                  max="10240"
-                  step="32"
-                  class="input input-bordered"
-                  placeholder="1024"
-                >
-              </div>
+          <div class="form-grid">
+            <label class="field-block">
+              <span class="field-label">默认FPS</span>
+              <input
+                v-model.number="extraConfig.fps"
+                type="number"
+                min="12"
+                max="60"
+                class="field-input"
+                placeholder="24"
+              >
+            </label>
 
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认高度</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.height"
-                  type="number"
-                  min="256"
-                  max="10240"
-                  step="32"
-                  class="input input-bordered"
-                  placeholder="1024"
-                >
-              </div>
+            <label class="field-block">
+              <span class="field-label">默认时长(秒)</span>
+              <input
+                v-model.number="extraConfig.duration"
+                type="number"
+                min="1"
+                max="30"
+                class="field-input"
+                placeholder="5"
+              >
+            </label>
+          </div>
+        </section>
 
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">默认重绘强度</span>
-                </label>
-                <input
-                  v-model.number="extraConfig.strength"
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  class="input input-bordered"
-                  placeholder="0.35"
-                >
-              </div>
+        <section
+          v-if="formData.provider_type === 'image_edit'"
+          class="panel-card"
+        >
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                图片编辑参数配置
+              </h2>
+              <p class="card-desc">
+                设置默认画布尺寸与重绘强度
+              </p>
             </div>
           </div>
 
-          <!-- 通用配置 -->
-          <div class="divider">
-            通用配置
+          <div class="form-grid form-grid-3">
+            <label class="field-block">
+              <span class="field-label">默认宽度</span>
+              <input
+                v-model.number="extraConfig.width"
+                type="number"
+                min="256"
+                max="10240"
+                step="32"
+                class="field-input"
+                placeholder="1024"
+              >
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">默认高度</span>
+              <input
+                v-model.number="extraConfig.height"
+                type="number"
+                min="256"
+                max="10240"
+                step="32"
+                class="field-input"
+                placeholder="1024"
+              >
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">默认重绘强度</span>
+              <input
+                v-model.number="extraConfig.strength"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                class="field-input"
+                placeholder="0.35"
+              >
+            </label>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">优先级</span>
-              </label>
+        </section>
+
+        <section class="panel-card">
+          <div class="card-top">
+            <div>
+              <h2 class="card-title">
+                通用配置
+              </h2>
+              <p class="card-desc">
+                控制超时、限流和启用状态
+              </p>
+            </div>
+          </div>
+
+          <div class="form-grid form-grid-3">
+            <label class="field-block">
+              <span class="field-label">优先级</span>
               <input
                 v-model.number="formData.priority"
                 type="number"
                 min="0"
-                class="input input-bordered"
+                class="field-input"
               >
-              <label class="label">
-                <span class="label-text-alt text-base-content/60">
-                  数值越大优先级越高
-                </span>
-              </label>
-            </div>
+              <span class="field-hint">数值越大优先级越高</span>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">每分钟请求限制</span>
-              </label>
+            <label class="field-block">
+              <span class="field-label">每分钟请求限制</span>
               <input
                 v-model.number="formData.rate_limit_rpm"
                 type="number"
                 min="1"
-                class="input input-bordered"
+                class="field-input"
               >
-            </div>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">每天请求限制</span>
-              </label>
+            <label class="field-block">
+              <span class="field-label">每天请求限制</span>
               <input
                 v-model.number="formData.rate_limit_rpd"
                 type="number"
                 min="1"
-                class="input input-bordered"
+                class="field-input"
               >
-            </div>
+            </label>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">超时时间(秒)</span>
-              </label>
+          <div class="form-grid utility-grid">
+            <label class="field-block">
+              <span class="field-label">超时时间(秒)</span>
               <input
                 v-model.number="formData.timeout"
                 type="number"
                 min="1"
                 max="600"
-                class="input input-bordered"
+                class="field-input"
               >
-            </div>
+            </label>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">状态</span>
-              </label>
-              <label class="label cursor-pointer justify-start gap-3">
+            <label class="toggle-card">
+              <span class="field-label">状态</span>
+              <span class="toggle-inner">
                 <input
                   v-model="formData.is_active"
                   type="checkbox"
-                  class="toggle toggle-primary"
                 >
-                <span class="label-text">{{ formData.is_active ? '已激活' : '未激活' }}</span>
-              </label>
-            </div>
+                <span class="toggle-text">{{ formData.is_active ? '已激活' : '未激活' }}</span>
+              </span>
+            </label>
           </div>
+        </section>
 
-          <!-- 操作按钮 -->
-          <div class="flex gap-3 pt-4">
-            <button
-              type="submit"
-              class="btn btn-primary"
-              :disabled="submitting"
-            >
-              <span
-                v-if="submitting"
-                class="loading loading-spinner loading-sm"
-              />
-              {{ submitting ? '保存中...' : '保存' }}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost"
-              :disabled="submitting"
-              @click="handleCancel"
-            >
-              取消
-            </button>
-          </div>
-        </form>
-      </loading-container>
-    </page-card>
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="primary-action"
+            :disabled="submitting"
+          >
+            <span>{{ submitting ? '保存中...' : '保存' }}</span>
+          </button>
+          <button
+            type="button"
+            class="secondary-outline-action"
+            :disabled="submitting"
+            @click="handleCancel"
+          >
+            取消
+          </button>
+        </div>
+      </form>
+    </loading-container>
   </div>
 </template>
 
 <script>
 import { mapActions, mapState } from 'vuex'
-import PageCard from '@/components/common/PageCard.vue'
 import LoadingContainer from '@/components/common/LoadingContainer.vue'
 
 export default {
   name: 'ModelForm',
   components: {
-    PageCard,
     LoadingContainer
   },
   data() {
@@ -476,12 +484,10 @@ export default {
         const provider = await this.fetchProvider(this.$route.params.id)
         this.formData = { ...this.formData, ...provider }
 
-        // 解析extra_config
         if (provider.extra_config) {
           this.extraConfig = { ...this.extraConfig, ...provider.extra_config }
         }
 
-        // 加载执行器选项
         if (provider.provider_type) {
           await this.loadExecutorChoices(provider.provider_type)
         }
@@ -493,7 +499,6 @@ export default {
     },
 
     async handleProviderTypeChange() {
-      // 当provider_type改变时，重新加载执行器选项并清空当前选择
       this.formData.executor_class = ''
       if (this.formData.provider_type) {
         await this.loadExecutorChoices(this.formData.provider_type)
@@ -508,18 +513,14 @@ export default {
         const { modelProviderApi } = await import('@/api/models')
         const response = await modelProviderApi.getExecutorChoices(providerType)
 
-        // 根据返回格式解析执行器列表
         if (response.executors) {
-          // 指定类型的返回格式
           this.availableExecutors = response.executors
         } else if (response[providerType]) {
-          // 所有类型的返回格式
           this.availableExecutors = response[providerType]
         } else {
           this.availableExecutors = []
         }
 
-        // 如果只有一个执行器，自动选择
         if (this.availableExecutors.length === 1 && !this.formData.executor_class) {
           this.formData.executor_class = this.availableExecutors[0].value
         }
@@ -535,7 +536,6 @@ export default {
       this.submitting = true
 
       try {
-        // 合并extra_config
         const submitData = {
           ...this.formData,
           extra_config: this.extraConfig
@@ -571,3 +571,307 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.page-shell {
+  min-height: 100vh;
+  padding: 2.5rem 3.5rem 3rem;
+  background: transparent;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.page-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.page-title {
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.layout-shell.theme-dark .page-title {
+  color: #e2e8f0;
+}
+
+.page-subtitle {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.layout-shell.theme-dark .page-subtitle {
+  color: #94a3b8;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.form-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel-card {
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.7) 0%, rgba(14, 165, 233, 0.7) 100%) 0 0 / 0 3px no-repeat,
+    rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  padding: 1.35rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+  transition: all 0.3s ease;
+}
+
+.layout-shell.theme-dark .panel-card {
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.5) 0%, rgba(56, 189, 248, 0.5) 100%) 0 0 / 0 3px no-repeat,
+    rgba(15, 23, 42, 0.92);
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.55);
+}
+
+.panel-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  border-color: rgba(148, 163, 184, 0.35);
+  background-size: 100% 3px, auto;
+}
+
+.layout-shell.theme-dark .panel-card:hover {
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.6);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.layout-shell.theme-dark .card-title {
+  color: #e2e8f0;
+}
+
+.card-desc {
+  margin: 0.4rem 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.layout-shell.theme-dark .card-desc {
+  color: #94a3b8;
+}
+
+.pill {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(20, 184, 166, 0.16);
+  color: #0f172a;
+}
+
+.layout-shell.theme-dark .pill {
+  background: rgba(94, 234, 212, 0.22);
+  color: #e2e8f0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.form-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.utility-grid {
+  margin-top: 1rem;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.field-block-wide {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.field-label em {
+  font-style: normal;
+  color: #ef4444;
+}
+
+.layout-shell.theme-dark .field-label {
+  color: #94a3b8;
+}
+
+.field-input {
+  width: 100%;
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.layout-shell.theme-dark .field-input {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+}
+
+.field-input:focus {
+  border-color: rgba(20, 184, 166, 0.6);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+}
+
+.field-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.toggle-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.layout-shell.theme-dark .toggle-card {
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.toggle-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #475569;
+}
+
+.layout-shell.theme-dark .toggle-inner {
+  color: #cbd5e1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primary-action,
+.secondary-outline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.72rem 1.35rem;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-action {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.secondary-outline-action {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.85);
+  color: #334155;
+}
+
+.layout-shell.theme-dark .primary-action,
+.layout-shell.theme-dark .secondary-outline-action {
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.primary-action:hover,
+.secondary-outline-action:hover {
+  border-color: rgba(20, 184, 166, 0.6);
+  box-shadow: 0 12px 24px rgba(20, 184, 166, 0.18);
+  transform: translateY(-1px);
+}
+
+.primary-action:disabled,
+.secondary-outline-action:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1024px) {
+  .form-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 2rem 1.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions,
+  .form-actions {
+    width: 100%;
+  }
+
+  .form-grid,
+  .form-grid-3,
+  .utility-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-action,
+  .secondary-outline-action {
+    width: 100%;
+  }
+}
+</style>
