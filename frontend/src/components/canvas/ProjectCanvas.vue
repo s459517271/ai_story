@@ -486,7 +486,7 @@
             暂无工作流数据
           </div>
           <div class="empty-hint">
-            请先执行文案改写阶段
+            请先执行剧本精修阶段
           </div>
         </div>
       </flow-canvas>

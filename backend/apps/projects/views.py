@@ -728,7 +728,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 'id': None,
                 'project': project.id,
                 'stage_type': 'rewrite',
-                'stage_type_display': '文案改写',
+                'stage_type_display': '剧本精修',
                 'status': 'pending',
                 'status_display': '待处理',
                 'input_data': None,

@@ -33,7 +33,7 @@
               所有阶段
             </option>
             <option value="rewrite">
-              文案改写
+              剧本精修
             </option>
             <option value="storyboard">
               分镜生成

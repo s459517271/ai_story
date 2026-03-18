@@ -634,7 +634,7 @@ export default {
           // 显示阶段更新消息
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
-              'rewrite': '文案改写',
+              'rewrite': '剧本精修',
               'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',
@@ -661,7 +661,7 @@ export default {
           // 显示阶段完成消息
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
-              'rewrite': '文案改写',
+              'rewrite': '剧本精修',
               'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',
@@ -765,7 +765,7 @@ export default {
           // 显示阶段错误消息
           if (data.stage && data.stage !== 'pipeline') {
             const stageNames = {
-              'rewrite': '文案改写',
+              'rewrite': '剧本精修',
               'asset_extraction': '资产抽取',
               'storyboard': '分镜生成',
               'image_generation': '图片生成',

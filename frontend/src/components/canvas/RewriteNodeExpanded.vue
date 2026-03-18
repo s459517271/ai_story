@@ -126,7 +126,7 @@
                 d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
               />
             </svg>
-            <span class="sub-node-title">改写后文案</span>
+            <span class="sub-node-title">精修后剧本</span>
           </div>
         </div>
         <div class="sub-node-body sub-node-body-editor">
@@ -136,7 +136,7 @@
               v-model="localText"
               class="textarea w-full rewrite-textarea"
               rows="3"
-              placeholder="改写后的文案将显示在这里..."
+              placeholder="精修后的剧本将显示在这里..."
               :disabled="status === 'processing'"
               @focus="handleFocus"
               @blur="handleBlur"
@@ -470,7 +470,7 @@ export default {
               this.$message?.success('分镜生成完成');
               this.$emit('storyboard-generated');
             } else {
-              this.$message?.success('文案改写完成');
+              this.$message?.success('剧本精修完成');
             }
 
             if (this.sseClient) {

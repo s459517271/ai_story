@@ -349,7 +349,7 @@ export const promptDebugAPI = {
 }
 
 export const STAGE_TYPES = [
-  { value: 'rewrite', label: '文案改写' },
+  { value: 'rewrite', label: '剧本精修' },
   { value: 'asset_extraction', label: '资产抽取' },
   { value: 'storyboard', label: '分镜生成' },
   { value: 'image_generation', label: '文生图' },

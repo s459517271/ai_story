@@ -59,7 +59,7 @@ class PromptTemplate(models.Model):
     """
 
     STAGE_TYPES = [
-        ('rewrite', '文案改写'),
+        ('rewrite', '剧本精修'),
         ('asset_extraction', '资产抽取'),
         ('storyboard', '分镜生成'),
         ('image_generation', '文生图'),

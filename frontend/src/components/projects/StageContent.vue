@@ -494,7 +494,7 @@ export default {
     getInputPlaceholder() {
       const placeholders = {
         rewrite: '输入原始文案或上一阶段的输出结果',
-        storyboard: '输入改写后的文案',
+        storyboard: '输入精修后的剧本',
         image_generation: '输入分镜描述(JSON数组格式)',
         multi_grid_image: '输入多宫格生成参数(JSON格式)',
         image_edit: '输入图片编辑参数(JSON格式)',
@@ -506,7 +506,7 @@ export default {
 
     getOutputPlaceholder() {
       const placeholders = {
-        rewrite: 'AI改写后的文案',
+        rewrite: 'AI精修后的剧本',
         storyboard: '分镜列表(JSON数组格式)',
         image_generation: '生成的图片URL列表',
         camera_movement: '运镜参数配置',
@@ -518,7 +518,7 @@ export default {
     getInputDescription() {
       const descriptions = {
         rewrite: '可以输入原始文案,也可以手动编辑',
-        storyboard: '输入改写后的文案,AI将生成分镜',
+        storyboard: '输入精修后的剧本,AI将生成分镜',
         image_generation: '输入分镜描述,AI将生成对应图片',
         camera_movement: '输入图片信息,AI将生成运镜参数',
         video_generation: '输入运镜参数,AI将生成视频',
@@ -528,7 +528,7 @@ export default {
 
     getOutputDescription() {
       const descriptions = {
-        rewrite: '改写后的文案,可手动修改',
+        rewrite: '精修后的剧本,可手动修改',
         storyboard: '分镜列表,每个分镜包含描述和时长',
         image_generation: '生成的图片URL,可批量下载',
         camera_movement: '运镜参数,包含运动类型和参数',
@@ -690,7 +690,7 @@ export default {
      */
     getStageName() {
       const names = {
-        rewrite: '文案改写',
+        rewrite: '剧本精修',
         storyboard: '分镜生成',
         image_generation: '文生图',
         multi_grid_image: '多宫格图片',

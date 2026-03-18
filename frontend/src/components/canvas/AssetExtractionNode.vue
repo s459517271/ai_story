@@ -142,7 +142,7 @@ export default {
     },
     sourceTypeText() {
       const map = {
-        rewritten_text: '改写文案',
+        rewritten_text: '精修剧本',
         original_text: '原始文案',
         original_topic: '原始文案',
       };
