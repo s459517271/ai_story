@@ -1,6 +1,8 @@
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -302,6 +304,37 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
         newapi_capability_keys = [item['key'] for item in newapi['capabilities']]
         self.assertIn('text2image', newapi_capability_keys)
         self.assertIn('image2video', newapi_capability_keys)
+
+    def test_provider_list_orders_by_created_at_desc_by_default(self):
+        older_provider = ModelProvider.objects.create(
+            name='Older provider',
+            provider_type='llm',
+            api_url='https://example.com/v1/chat/completions',
+            api_key='sk-old',
+            model_name='older-model',
+            executor_class='core.ai_client.openai_client.OpenAIClient',
+            priority=999,
+        )
+        newer_provider = ModelProvider.objects.create(
+            name='Newer provider',
+            provider_type='llm',
+            api_url='https://example.com/v1/chat/completions',
+            api_key='sk-new',
+            model_name='newer-model',
+            executor_class='core.ai_client.openai_client.OpenAIClient',
+            priority=0,
+        )
+
+        ModelProvider.objects.filter(id=older_provider.id).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+
+        response = self.client.get('/api/v1/models/providers/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data['results']), 2)
+        self.assertEqual(response.data['results'][0]['id'], str(newer_provider.id))
+        self.assertEqual(response.data['results'][1]['id'], str(older_provider.id))
 
     @patch('apps.models.services.requests.get')
     def test_discover_vendor_models_endpoint(self, mock_get):
