@@ -5,7 +5,7 @@
 """
 
 from rest_framework import serializers
-from .models import ModelProvider, ModelUsageLog
+from .models import ModelProvider, ModelUsageLog, VendorConnectionConfig
 from .vendor_catalog import VENDOR_CATALOG
 
 
@@ -297,6 +297,22 @@ class ModelProviderTestSerializer(serializers.Serializer):
         default="Hello, this is a test.",
         help_text="测试用的提示词"
     )
+    test_image_url = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='测试用图片URL，图生视频模型可传'
+    )
+    test_image_base64 = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='测试用图片base64，支持传入 data URL 或纯base64'
+    )
+    test_image_mime_type = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='image/jpeg',
+        help_text='测试图片 MIME 类型'
+    )
 
     def validate(self, attrs):
         """验证模型提供商配置"""
@@ -311,6 +327,18 @@ class ModelProviderTestSerializer(serializers.Serializer):
 
         if not provider.is_active:
             raise serializers.ValidationError("模型提供商未激活")
+
+        test_image_base64 = (attrs.get('test_image_base64') or '').strip()
+        mime_type = (attrs.get('test_image_mime_type') or 'image/jpeg').strip() or 'image/jpeg'
+
+        if test_image_base64.startswith('data:') and ';base64,' in test_image_base64:
+            header, encoded = test_image_base64.split(';base64,', 1)
+            mime_type = header.split(':', 1)[1] if ':' in header else mime_type
+            test_image_base64 = encoded.strip()
+
+        attrs['test_image_url'] = (attrs.get('test_image_url') or '').strip()
+        attrs['test_image_base64'] = test_image_base64
+        attrs['test_image_mime_type'] = mime_type
 
         attrs['provider'] = provider
         return attrs
@@ -386,4 +414,46 @@ class VendorModelBatchCreateSerializer(serializers.Serializer):
         if attrs['capability'] not in capabilities:
             raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
         capability_config = capabilities[attrs['capability']]
+        return attrs
+
+
+class VendorConnectionConfigSerializer(serializers.ModelSerializer):
+    """厂商导入连接配置序列化器。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+
+    class Meta:
+        model = VendorConnectionConfig
+        fields = [
+            'vendor', 'capability', 'api_key', 'api_url',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def validate_api_key(self, value):
+        return (value or '').strip()
+
+    def validate_api_url(self, value):
+        return (value or '').strip()
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
+        return attrs
+
+
+class VendorConnectionConfigQuerySerializer(serializers.Serializer):
+    """厂商导入连接配置查询参数。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
         return attrs

@@ -190,7 +190,7 @@ class PromptTemplateSetSerializer(serializers.ModelSerializer):
     """
 
     created_by = UserSerializer(read_only=True)
-    templates = PromptTemplateListSerializer(many=True, read_only=True)
+    templates = serializers.SerializerMethodField()
     templates_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -201,6 +201,14 @@ class PromptTemplateSetSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_templates(self, obj):
+        stage_order = {stage_type: index for index, (stage_type, _) in enumerate(PromptTemplate.STAGE_TYPES)}
+        templates = sorted(
+            obj.templates.all(),
+            key=lambda template: stage_order.get(template.stage_type, len(stage_order))
+        )
+        return PromptTemplateListSerializer(templates, many=True, context=self.context).data
 
     def get_templates_count(self, obj):
         """获取模板数量"""

@@ -13,6 +13,7 @@ venv
 /build/
 /media/
 db.sqlite3
+ai_story.db
 music_tag.db
 local_settings.py
 .DS_Store
@@ -33,5 +34,6 @@ django.log
 /backend/storage/image/
 .git
 .env
-/frontend/
+frontend/node_modules/
+frontend/dist/
 *.png

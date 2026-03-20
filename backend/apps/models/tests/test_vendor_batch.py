@@ -1,10 +1,12 @@
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.models.models import ModelProvider
+from apps.models.models import ModelProvider, VendorConnectionConfig
 from apps.models.services import ModelProviderService
 
 
@@ -108,8 +110,8 @@ class ModelProviderVendorServiceTestCase(APITestCase):
         provider = ModelProvider.objects.get(model_name='seedance-1-0-lite-i2v')
         self.assertEqual(result['created_count'], 1)
         self.assertEqual(provider.provider_type, 'image2video')
-        self.assertEqual(provider.api_url, 'https://ark.cn-beijing.volces.com/api/v3/videos/generations')
-        self.assertEqual(provider.executor_class, 'core.ai_client.image2video_client.VideoGeneratorClient')
+        self.assertEqual(provider.api_url, 'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks')
+        self.assertEqual(provider.executor_class, 'core.ai_client.volcengine_image2video_client.VolcengineImage2VideoClient')
 
     def test_batch_create_vendor_models_supports_gemini_multimodal(self):
         image_result = ModelProviderService.batch_create_vendor_models({
@@ -289,16 +291,50 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
         self.assertIn('newapi', vendor_keys)
         self.assertIn('deepseek', vendor_keys)
         self.assertIn('minimax', vendor_keys)
+        self.assertIn('modelscope', vendor_keys)
         gemini = next(item for item in response.data['results'] if item['key'] == 'gemini')
         gemini_capability_keys = [item['key'] for item in gemini['capabilities']]
         self.assertIn('text2image', gemini_capability_keys)
         self.assertIn('image2video', gemini_capability_keys)
+        modelscope = next(item for item in response.data['results'] if item['key'] == 'modelscope')
+        self.assertEqual(modelscope['capabilities'][0]['api_url'], 'https://api-inference.modelscope.cn/v1/chat/completions')
         openai = next(item for item in response.data['results'] if item['key'] == 'openai')
         self.assertTrue(all(item['configurable_api_url'] for item in openai['capabilities']))
         newapi = next(item for item in response.data['results'] if item['key'] == 'newapi')
         newapi_capability_keys = [item['key'] for item in newapi['capabilities']]
         self.assertIn('text2image', newapi_capability_keys)
         self.assertIn('image2video', newapi_capability_keys)
+
+    def test_provider_list_orders_by_created_at_desc_by_default(self):
+        older_provider = ModelProvider.objects.create(
+            name='Older provider',
+            provider_type='llm',
+            api_url='https://example.com/v1/chat/completions',
+            api_key='sk-old',
+            model_name='older-model',
+            executor_class='core.ai_client.openai_client.OpenAIClient',
+            priority=999,
+        )
+        newer_provider = ModelProvider.objects.create(
+            name='Newer provider',
+            provider_type='llm',
+            api_url='https://example.com/v1/chat/completions',
+            api_key='sk-new',
+            model_name='newer-model',
+            executor_class='core.ai_client.openai_client.OpenAIClient',
+            priority=0,
+        )
+
+        ModelProvider.objects.filter(id=older_provider.id).update(
+            created_at=timezone.now() - timedelta(days=1)
+        )
+
+        response = self.client.get('/api/v1/models/providers/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data['results']), 2)
+        self.assertEqual(response.data['results'][0]['id'], str(newer_provider.id))
+        self.assertEqual(response.data['results'][1]['id'], str(older_provider.id))
 
     @patch('apps.models.services.requests.get')
     def test_discover_vendor_models_endpoint(self, mock_get):
@@ -463,3 +499,79 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
         provider = ModelProvider.objects.get(model_name='kling-v1')
         self.assertEqual(provider.provider_type, 'image2video')
         self.assertEqual(provider.api_url, 'https://newapi.example.com/v1/videos/generations')
+
+    def test_vendor_connection_config_get_returns_saved_config(self):
+        VendorConnectionConfig.objects.create(
+            user=self.user,
+            vendor='openai',
+            capability='llm',
+            api_key='sk-saved',
+            api_url='https://gateway.example.com/v1/chat/completions',
+        )
+
+        response = self.client.get('/api/v1/models/providers/vendor_connection_config/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['api_key'], 'sk-saved')
+        self.assertEqual(response.data['api_url'], 'https://gateway.example.com/v1/chat/completions')
+
+    def test_vendor_connection_config_put_persists_api_key_and_url(self):
+        response = self.client.put('/api/v1/models/providers/vendor_connection_config/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+            'api_key': 'sk-put',
+            'api_url': 'https://gateway.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='openai', capability='llm')
+        self.assertEqual(config.api_key, 'sk-put')
+        self.assertEqual(config.api_url, 'https://gateway.example.com/v1/chat/completions')
+
+    @patch('apps.models.services.requests.get')
+    def test_discover_vendor_models_persists_vendor_connection_config(self, mock_get):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'gpt-4o-mini'},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        response = self.client.post('/api/v1/models/providers/discover_vendor_models/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+            'api_key': 'sk-discover',
+            'api_url': 'https://gateway.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='openai', capability='llm')
+        self.assertEqual(config.api_key, 'sk-discover')
+        self.assertEqual(config.api_url, 'https://gateway.example.com/v1/chat/completions')
+
+    def test_batch_create_vendor_models_persists_vendor_connection_config(self):
+        response = self.client.post('/api/v1/models/providers/batch_create_vendor_models/', {
+            'vendor': 'moonshot',
+            'capability': 'llm',
+            'api_key': 'sk-batch',
+            'api_url': 'https://api.moonshot.cn/v1/chat/completions',
+            'model_names': ['moonshot-v1-8k'],
+            'is_active': True,
+            'timeout': 60,
+            'max_tokens': 4096,
+            'temperature': 0.7,
+            'top_p': 1.0,
+            'rate_limit_rpm': 60,
+            'rate_limit_rpd': 1000,
+            'priority': 0,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='moonshot', capability='llm')
+        self.assertEqual(config.api_key, 'sk-batch')
+        self.assertEqual(config.api_url, 'https://api.moonshot.cn/v1/chat/completions')

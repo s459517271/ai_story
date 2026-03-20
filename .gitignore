@@ -16,6 +16,7 @@ wheels/
 # Django
 *.log
 db.sqlite3
+ai_story.db
 db.sqlite3-journal
 /staticfiles/
 /media/

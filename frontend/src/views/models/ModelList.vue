@@ -108,7 +108,7 @@
               </p>
             </div>
             <span
-              class="badge badge-sm"
+              class="badge badge-sm card-type-badge"
               :class="getProviderTypeBadgeClass(provider.provider_type)"
             >
               {{ getProviderTypeLabel(provider.provider_type) }}
@@ -322,11 +322,11 @@ export default {
       try {
         const result = await this.testProviderConnection({
           id: provider.id,
-          testPrompt: 'Hello, this is a test.'
+          testPrompt: '你好啊？'
         })
 
         if (result.success) {
-          await this.$alert(`测试成功! 延迟: ${result.latency_ms}ms`, '测试结果', { tone: 'success' })
+          await this.$alert(`测试成功! 延迟: ${result.latency_ms}ms, 返回结果: ${result.response}`, '测试结果', { tone: 'success' })
         } else {
           await this.$alert(`测试失败: ${result.error}`, '测试结果', { tone: 'error' })
         }
@@ -663,7 +663,14 @@ export default {
 }
 
 .card-main {
+  flex: 1;
   min-width: 0;
+}
+
+.card-type-badge {
+  flex-shrink: 0;
+  align-self: flex-start;
+  white-space: nowrap;
 }
 
 .card-title {
