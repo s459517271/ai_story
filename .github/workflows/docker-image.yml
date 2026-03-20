@@ -11,7 +11,7 @@ on:
 
 env:
   DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-  IMAGE_VERSION: 1.0.0 # todo test
+  IMAGE_VERSION: 1.0.1 # todo test
 
 jobs:
   build-and-push:
