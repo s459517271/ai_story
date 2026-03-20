@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.models.models import ModelProvider
+from apps.models.models import ModelProvider, VendorConnectionConfig
 from apps.models.services import ModelProviderService
 
 
@@ -466,3 +466,79 @@ class ModelProviderVendorViewSetTestCase(APITestCase):
         provider = ModelProvider.objects.get(model_name='kling-v1')
         self.assertEqual(provider.provider_type, 'image2video')
         self.assertEqual(provider.api_url, 'https://newapi.example.com/v1/videos/generations')
+
+    def test_vendor_connection_config_get_returns_saved_config(self):
+        VendorConnectionConfig.objects.create(
+            user=self.user,
+            vendor='openai',
+            capability='llm',
+            api_key='sk-saved',
+            api_url='https://gateway.example.com/v1/chat/completions',
+        )
+
+        response = self.client.get('/api/v1/models/providers/vendor_connection_config/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['api_key'], 'sk-saved')
+        self.assertEqual(response.data['api_url'], 'https://gateway.example.com/v1/chat/completions')
+
+    def test_vendor_connection_config_put_persists_api_key_and_url(self):
+        response = self.client.put('/api/v1/models/providers/vendor_connection_config/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+            'api_key': 'sk-put',
+            'api_url': 'https://gateway.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='openai', capability='llm')
+        self.assertEqual(config.api_key, 'sk-put')
+        self.assertEqual(config.api_url, 'https://gateway.example.com/v1/chat/completions')
+
+    @patch('apps.models.services.requests.get')
+    def test_discover_vendor_models_persists_vendor_connection_config(self, mock_get):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'gpt-4o-mini'},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        response = self.client.post('/api/v1/models/providers/discover_vendor_models/', {
+            'vendor': 'openai',
+            'capability': 'llm',
+            'api_key': 'sk-discover',
+            'api_url': 'https://gateway.example.com/v1/chat/completions',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='openai', capability='llm')
+        self.assertEqual(config.api_key, 'sk-discover')
+        self.assertEqual(config.api_url, 'https://gateway.example.com/v1/chat/completions')
+
+    def test_batch_create_vendor_models_persists_vendor_connection_config(self):
+        response = self.client.post('/api/v1/models/providers/batch_create_vendor_models/', {
+            'vendor': 'moonshot',
+            'capability': 'llm',
+            'api_key': 'sk-batch',
+            'api_url': 'https://api.moonshot.cn/v1/chat/completions',
+            'model_names': ['moonshot-v1-8k'],
+            'is_active': True,
+            'timeout': 60,
+            'max_tokens': 4096,
+            'temperature': 0.7,
+            'top_p': 1.0,
+            'rate_limit_rpm': 60,
+            'rate_limit_rpd': 1000,
+            'priority': 0,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        config = VendorConnectionConfig.objects.get(user=self.user, vendor='moonshot', capability='llm')
+        self.assertEqual(config.api_key, 'sk-batch')
+        self.assertEqual(config.api_url, 'https://api.moonshot.cn/v1/chat/completions')

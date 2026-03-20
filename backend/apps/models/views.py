@@ -24,6 +24,8 @@ from .serializers import (
     ModelProviderSimpleSerializer,
     VendorModelDiscoverySerializer,
     VendorModelBatchCreateSerializer,
+    VendorConnectionConfigSerializer,
+    VendorConnectionConfigQuerySerializer,
 )
 from .services import ModelProviderService, ModelUsageLogService
 
@@ -335,6 +337,37 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
             'results': vendors,
         })
 
+    @action(detail=False, methods=['get', 'put'])
+    def vendor_connection_config(self, request):
+        """获取或保存当前用户的厂商导入连接配置。"""
+        if request.method.lower() == 'get':
+            serializer = VendorConnectionConfigQuerySerializer(data=request.query_params)
+            serializer.is_valid(raise_exception=True)
+            config = ModelProviderService.get_vendor_connection_config(
+                user=request.user,
+                vendor=serializer.validated_data['vendor'],
+                capability=serializer.validated_data['capability'],
+            )
+            if not config:
+                return Response({
+                    'vendor': serializer.validated_data['vendor'],
+                    'capability': serializer.validated_data['capability'],
+                    'api_key': '',
+                    'api_url': '',
+                })
+            return Response(VendorConnectionConfigSerializer(config).data)
+
+        serializer = VendorConnectionConfigSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        config = ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data.get('api_key', ''),
+            api_url=serializer.validated_data.get('api_url', ''),
+        )
+        return Response(VendorConnectionConfigSerializer(config).data)
+
     @action(detail=False, methods=['post'])
     def discover_vendor_models(self, request):
         """根据厂商和 API Key 拉取模型列表。"""
@@ -353,6 +386,14 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
         except Exception as error:
             return Response({'error': f'获取厂商模型失败: {error}'}, status=status.HTTP_400_BAD_REQUEST)
 
+        ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data['api_key'],
+            api_url=result.get('api_url', serializer.validated_data.get('api_url', '')),
+        )
+
         return Response(result)
 
     @action(detail=False, methods=['post'])
@@ -362,6 +403,14 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         result = ModelProviderService.batch_create_vendor_models(serializer.validated_data)
+
+        ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data['api_key'],
+            api_url=result.get('api_url', serializer.validated_data.get('api_url', '')),
+        )
 
         return Response({
             'vendor': result['vendor'],

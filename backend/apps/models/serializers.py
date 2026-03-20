@@ -5,7 +5,7 @@
 """
 
 from rest_framework import serializers
-from .models import ModelProvider, ModelUsageLog
+from .models import ModelProvider, ModelUsageLog, VendorConnectionConfig
 from .vendor_catalog import VENDOR_CATALOG
 
 
@@ -386,4 +386,46 @@ class VendorModelBatchCreateSerializer(serializers.Serializer):
         if attrs['capability'] not in capabilities:
             raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
         capability_config = capabilities[attrs['capability']]
+        return attrs
+
+
+class VendorConnectionConfigSerializer(serializers.ModelSerializer):
+    """厂商导入连接配置序列化器。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+
+    class Meta:
+        model = VendorConnectionConfig
+        fields = [
+            'vendor', 'capability', 'api_key', 'api_url',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def validate_api_key(self, value):
+        return (value or '').strip()
+
+    def validate_api_url(self, value):
+        return (value or '').strip()
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
+        return attrs
+
+
+class VendorConnectionConfigQuerySerializer(serializers.Serializer):
+    """厂商导入连接配置查询参数。"""
+
+    vendor = serializers.ChoiceField(choices=[(key, value['label']) for key, value in VENDOR_CATALOG.items()])
+    capability = serializers.ChoiceField(choices=ModelProvider.PROVIDER_TYPES)
+
+    def validate(self, attrs):
+        vendor_config = VENDOR_CATALOG.get(attrs['vendor'], {})
+        capabilities = vendor_config.get('capabilities', {})
+        if attrs['capability'] not in capabilities:
+            raise serializers.ValidationError({'capability': '当前厂商不支持该模型能力'})
         return attrs

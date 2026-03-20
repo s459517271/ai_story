@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List, Iterable
 from django.db import transaction
 from django.db.models import Q, Avg, Sum
 from asgiref.sync import sync_to_async
-from .models import ModelProvider, ModelUsageLog
+from .models import ModelProvider, ModelUsageLog, VendorConnectionConfig
 from .vendor_catalog import VENDOR_CATALOG
 from urllib.parse import urlparse
 
@@ -218,6 +218,36 @@ class ModelProviderService:
                 'capabilities': capabilities,
             })
         return vendors
+
+    @staticmethod
+    def get_vendor_connection_config(user, vendor: str, capability: str) -> Optional[VendorConnectionConfig]:
+        """获取用户保存的厂商导入连接配置。"""
+        return VendorConnectionConfig.objects.filter(
+            user=user,
+            vendor=vendor,
+            capability=capability,
+        ).first()
+
+    @staticmethod
+    @transaction.atomic
+    def save_vendor_connection_config(
+        user,
+        vendor: str,
+        capability: str,
+        api_key: str,
+        api_url: Optional[str] = None,
+    ) -> VendorConnectionConfig:
+        """保存用户的厂商导入连接配置。"""
+        config, _ = VendorConnectionConfig.objects.update_or_create(
+            user=user,
+            vendor=vendor,
+            capability=capability,
+            defaults={
+                'api_key': (api_key or '').strip(),
+                'api_url': (api_url or '').strip(),
+            }
+        )
+        return config
 
     @staticmethod
     def _normalize_capability_token(value: Any) -> str:
@@ -445,6 +475,7 @@ class ModelProviderService:
             'vendor_label': vendor_config['label'],
             'capability': capability,
             'provider_type': capability_config['provider_type'],
+            'api_url': capability_config['api_url'],
             'created_count': len(created),
             'skipped_count': len(skipped),
             'created': created,

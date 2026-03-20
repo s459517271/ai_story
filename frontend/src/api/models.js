@@ -158,6 +158,14 @@ export const modelProviderApi = {
     return apiClient.get('/models/providers/builtin_vendors/')
   },
 
+  getVendorConnectionConfig(params) {
+    return apiClient.get('/models/providers/vendor_connection_config/', { params })
+  },
+
+  updateVendorConnectionConfig(data) {
+    return apiClient.put('/models/providers/vendor_connection_config/', data)
+  },
+
   discoverVendorModels(data) {
     return apiClient.post('/models/providers/discover_vendor_models/', data)
   },

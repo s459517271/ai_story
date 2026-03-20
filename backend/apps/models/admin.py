@@ -2,7 +2,7 @@
 from django import forms
 from django.contrib import admin
 from django.core.exceptions import ValidationError
-from .models import ModelProvider, ModelUsageLog
+from .models import ModelProvider, ModelUsageLog, VendorConnectionConfig
 
 
 class ModelProviderAdminForm(forms.ModelForm):
@@ -102,3 +102,11 @@ class ModelUsageLogAdmin(admin.ModelAdmin):
     list_display = ['model_provider', 'status', 'tokens_used', 'latency_ms', 'created_at']
     list_filter = ['status', 'created_at']
     readonly_fields = ['created_at']
+
+
+@admin.register(VendorConnectionConfig)
+class VendorConnectionConfigAdmin(admin.ModelAdmin):
+    list_display = ['user', 'vendor', 'capability', 'updated_at']
+    list_filter = ['vendor', 'capability', 'updated_at']
+    search_fields = ['user__username', 'vendor', 'capability', 'api_url']
+    readonly_fields = ['created_at', 'updated_at']

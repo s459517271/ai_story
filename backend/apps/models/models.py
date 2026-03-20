@@ -4,6 +4,7 @@
 """
 
 import uuid
+from django.conf import settings
 from django.db import models
 
 
@@ -130,6 +131,44 @@ class ModelProvider(models.Model):
 
         valid_executors = [choice[0] for choice in self.get_executor_choices()]
         return self.executor_class in valid_executors
+
+
+class VendorConnectionConfig(models.Model):
+    """
+    内置厂商导入连接配置
+    职责: 保存用户在厂商模型导入场景下使用的API Key和API地址
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='vendor_connection_configs',
+        verbose_name='用户'
+    )
+    vendor = models.CharField('厂商标识', max_length=64)
+    capability = models.CharField('模型能力', max_length=20, choices=ModelProvider.PROVIDER_TYPES)
+    api_key = models.CharField('API密钥', max_length=512, blank=True, default='')
+    api_url = models.URLField('API地址', blank=True, default='')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        db_table = 'vendor_connection_configs'
+        verbose_name = '厂商导入连接配置'
+        verbose_name_plural = '厂商导入连接配置'
+        ordering = ['vendor', 'capability']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'vendor', 'capability'],
+                name='unique_vendor_connection_config_per_user'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['user', 'vendor', 'capability']),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} - {self.vendor} - {self.capability}'
 
 
 class ModelUsageLog(models.Model):
