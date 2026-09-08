@@ -228,10 +228,12 @@ Manage all AI services in one place and switch between them with ease.
 Enter topic → Rewrite script → Generate storyboard → Generate images → Plan camera motion → Generate video → Done
       ↓              ↓                  ↓                  ↓                   ↓                    ↓
 Real-time progress updates, with the ability to pause, resume, or retry any stage
-``` 
+```
 
-**Fully automated** - Start with one click and let the system complete every step  
-**Real-time feedback** - Monitor generation progress as it happens  
+**Fully automated** - Start with one click and let the system complete every step
+
+**Real-time feedback** - Monitor generation progress as it happens
+
 **Flexible control** - Manually adjust and regenerate any stage
 
 ---
