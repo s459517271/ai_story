@@ -4,20 +4,29 @@
 遵循单一职责原则(SRP) + 开闭原则(OCP)
 """
 
+import base64
 import copy
 import logging
+import mimetypes
 import random
+import re
 from collections.abc import Mapping
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Tuple
+
+import requests
+from django.conf import settings
 from jinja2 import Template, TemplateError
 
 from core.ai_client.factory import create_ai_client
+from core.ai_client.image_service import ImageGenerationService
+from core.ai_client.schemas import Text2ImageRequest
 from core.pipeline.base import PipelineContext, StageProcessor
 from django.utils import timezone
 
 from apps.content.models import GeneratedImage, Storyboard
 from apps.models.models import ModelProvider
 from apps.projects.models import Project, ProjectStage
+from apps.prompts.client_param_resolver import resolve_stage_client_params
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +52,7 @@ class Text2ImageStageProcessor(StageProcessor):
         super().__init__('image_generation')
         self.stage_type = 'image_generation'
         self.max_concurrent = 3  # 最大并发生成数
+        self._image_asset_token_pattern = re.compile(r'__IMAGE_ASSET_(\d+)__')
 
     async def validate(self, context: PipelineContext) -> bool:
         """
@@ -76,7 +86,7 @@ class Text2ImageStageProcessor(StageProcessor):
                 return False
 
             # 检查是否有可用的文生图模型
-            provider = await self._get_text2image_provider(project)
+            provider = self._get_text2image_provider(project)
             if not provider:
                 logger.error(f"项目 {context.project_id} 未配置文生图模型")
                 return False
@@ -444,6 +454,7 @@ class Text2ImageStageProcessor(StageProcessor):
         同步获取全局变量（用于非异步上下文）
         """
         return self._get_global_variables(project)
+
     def replace_double_quote_in_dict(self, d):
         """
         递归替换字典中所有字符串类型value里的双引号为单引号
@@ -467,50 +478,259 @@ class Text2ImageStageProcessor(StageProcessor):
         # 非字符串/容器类型（数字、布尔等）直接返回
         else:
             return d
-    def _build_prompt(self, project: Project, storyboard: dict) -> str:
-        """
-        构建提示词
-        从PromptTemplate获取模板并使用Jinja2渲染
-        支持全局变量注入
-        """
+
+    def _get_accessible_image_assets(self, project: Project) -> Dict[str, Any]:
+        """获取当前项目可用的图片资产映射。"""
+        from django.db.models import Q
+
+        from apps.prompts.models import GlobalVariable
+
+        image_assets: Dict[str, Any] = {}
+
+        bindings = project.asset_bindings.select_related('asset').all()
+        for binding in bindings:
+            asset = binding.asset
+            if not asset or not asset.is_active or asset.variable_type != 'image':
+                continue
+            image_assets[asset.key] = asset
+
+        query = (
+            Q(created_by=project.user, scope='user', is_active=True, variable_type='image')
+            | Q(scope='system', is_active=True, variable_type='image')
+        )
+        for asset in GlobalVariable.objects.filter(query).order_by('scope', 'group', 'key'):
+            image_assets.setdefault(asset.key, asset)
+
+        return image_assets
+
+    def _build_image_asset_tokens(self, image_assets: Dict[str, Any]) -> Dict[str, str]:
+        """为图片资产生成模板渲染占位符。"""
+        return {
+            asset_key: f'__IMAGE_ASSET_{index}__'
+            for index, asset_key in enumerate(image_assets.keys(), 1)
+        }
+
+    def _inject_image_asset_tokens(
+        self,
+        template_vars: Dict[str, Any],
+        token_map: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """将图片资产在模板上下文中替换为内部占位符。"""
+        injected_vars = copy.deepcopy(template_vars)
+
+        for asset_key, token in token_map.items():
+            if asset_key in injected_vars:
+                injected_vars[asset_key] = token
+
+        project_assets = injected_vars.get('project_assets')
+        if isinstance(project_assets, dict):
+            for asset_key, token in token_map.items():
+                if asset_key in project_assets:
+                    project_assets[asset_key] = token
+
+        asset_bindings = injected_vars.get('asset_bindings')
+        if isinstance(asset_bindings, list):
+            for binding in asset_bindings:
+                if not isinstance(binding, dict):
+                    continue
+                asset_key = binding.get('key')
+                if binding.get('variable_type') != 'image' or asset_key not in token_map:
+                    continue
+                token = token_map[asset_key]
+                binding['typed_value'] = token
+                binding['prompt_text'] = token
+
+        return injected_vars
+
+    def _render_template_recursively(
+        self,
+        template_content: str,
+        template_vars: Dict[str, Any],
+        max_passes: int = 3,
+    ) -> str:
+        """支持对嵌套模板字符串进行有限次递归渲染。"""
+        rendered = template_content
+        for _ in range(max_passes):
+            next_rendered = Template(rendered).render(**template_vars)
+            if next_rendered == rendered:
+                return next_rendered
+            rendered = next_rendered
+            if '{{' not in rendered and '{%' not in rendered:
+                return rendered
+        return rendered
+
+    def _guess_image_mime_type(self, filename: str = '', image_bytes: bytes = b'') -> str:
+        """根据文件名或二进制头推断图片 MIME。"""
+        if filename:
+            guessed_type, _ = mimetypes.guess_type(filename)
+            if guessed_type and guessed_type.startswith('image/'):
+                return guessed_type.lower()
+
+        if image_bytes.startswith(b'\xFF\xD8\xFF'):
+            return 'image/jpeg'
+        if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'image/png'
+        if image_bytes.startswith((b'GIF87a', b'GIF89a')):
+            return 'image/gif'
+        if image_bytes.startswith(b'RIFF') and b'WEBP' in image_bytes[:16]:
+            return 'image/webp'
+        if image_bytes.startswith(b'BM'):
+            return 'image/bmp'
+        if image_bytes.lstrip().startswith(b'<svg'):
+            return 'image/svg+xml'
+
+        return 'image/png'
+
+    def _read_image_asset_bytes(self, asset) -> Tuple[bytes, str]:
+        """读取图片资产原始字节并返回 MIME 类型。"""
+        data_uri = (asset.value or '').strip()
+        if data_uri.startswith('data:image/') and ';base64,' in data_uri:
+            header, encoded = data_uri.split(';base64,', 1)
+            return base64.b64decode(encoded), header[5:].lower()
+
+        if asset.image_file:
+            image_bytes = asset.image_file.read()
+            asset.image_file.seek(0)
+            return image_bytes, self._guess_image_mime_type(asset.image_file.name, image_bytes)
+
+        source = str(asset.get_typed_value() or asset.value or '').strip()
+        if not source:
+            raise ValueError(f'图片资产 {asset.key} 缺少可用图片内容')
+
+        if source.startswith('/api/v1/content/storage/image/'):
+            relative_path = source.split('/api/v1/content/storage/image/', 1)[1]
+            image_path = settings.STORAGE_ROOT / 'image' / relative_path
+            image_bytes = image_path.read_bytes()
+            return image_bytes, self._guess_image_mime_type(image_path.name, image_bytes)
+
+        normalized_media_url = f'/{str(settings.MEDIA_URL).strip("/")}/'
+        if source.startswith(normalized_media_url) or source.startswith(str(settings.MEDIA_URL)):
+            relative_path = source.split(str(settings.MEDIA_URL).strip('/'), 1)[-1].lstrip('/')
+            image_path = settings.MEDIA_ROOT / relative_path
+            image_bytes = image_path.read_bytes()
+            return image_bytes, self._guess_image_mime_type(image_path.name, image_bytes)
+
+        response = requests.get(source, timeout=30)
+        response.raise_for_status()
+        image_bytes = response.content
+        content_type = response.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+        mime_type = content_type if content_type.startswith('image/') else self._guess_image_mime_type(source, image_bytes)
+        return image_bytes, mime_type
+
+    def _image_asset_to_data_uri(self, asset) -> str:
+        """将图片资产转换为模型可直接消费的 data URI。"""
+        raw_value = str(asset.value or '').strip()
+        if raw_value.startswith('data:image/') and ';base64,' in raw_value:
+            return raw_value
+
+        image_bytes, mime_type = self._read_image_asset_bytes(asset)
+        encoded = base64.b64encode(image_bytes).decode('utf-8')
+        return f'data:{mime_type.lower()};base64,{encoded}'
+
+    def _replace_image_asset_tokens(
+        self,
+        rendered_prompt: str,
+        image_assets: Dict[str, Any],
+        token_map: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """按图片在提示词中的出现顺序映射为 图1、图2，并构造 image 参数。"""
+        ordered_tokens = []
+        seen_tokens = set()
+
+        for match in self._image_asset_token_pattern.finditer(rendered_prompt):
+            token = match.group(0)
+            if token in seen_tokens:
+                continue
+            seen_tokens.add(token)
+            ordered_tokens.append(token)
+
+        if not ordered_tokens:
+            return {
+                'prompt': rendered_prompt,
+                'image': [],
+            }
+
+        token_to_asset = {
+            token: image_assets[asset_key]
+            for asset_key, token in token_map.items()
+        }
+        token_to_label = {
+            token: f'图{index}'
+            for index, token in enumerate(ordered_tokens, 1)
+        }
+
+        final_prompt = rendered_prompt
+        for token, label in token_to_label.items():
+            final_prompt = final_prompt.replace(token, label)
+
+        return {
+            'prompt': final_prompt,
+            'image': [self._image_asset_to_data_uri(token_to_asset[token]) for token in ordered_tokens],
+        }
+
+    def _build_generation_prompt_payload(self, project: Project, storyboard: dict) -> Dict[str, Any]:
+        """构建最终文生图提示词及关联图片输入。"""
         template = self._get_prompt_template(project)
 
         if not template:
             raise ValueError(f"未找到 {self.stage_type} 阶段的提示词模板")
 
         try:
-            # 获取全局变量（同步方式）
             global_vars = self._get_global_variables_sync(project)
             self.replace_double_quote_in_dict(storyboard)
-            # 准备模板变量（优先级：storyboard > project > global_vars）
             template_vars = {
-                **global_vars,  # 全局变量（最低优先级）
-                "random_seed": random.randint(1, 1000000),
+                **global_vars,
+                'random_seed': random.randint(1, 1000000),
                 'project': {
                     'name': project.name,
                     'description': project.description,
                     'original_topic': project.original_topic,
                 },
-                **storyboard  # 合并输入数据作为变量（最高优先级）
+                **storyboard,
             }
 
-            # 渲染Jinja2模板
-            jinja_template = Template(template.template_content)
-            rendered_prompt = jinja_template.render(**template_vars)
-
-            return rendered_prompt
+            image_assets = self._get_accessible_image_assets(project)
+            token_map = self._build_image_asset_tokens(image_assets)
+            injected_template_vars = self._inject_image_asset_tokens(template_vars, token_map)
+            rendered_prompt = self._render_template_recursively(
+                template.template_content,
+                injected_template_vars,
+            )
+            return self._replace_image_asset_tokens(rendered_prompt, image_assets, token_map)
 
         except TemplateError as e:
             logger.error(f"提示词模板渲染失败: {str(e)}")
             raise ValueError(f"提示词模板渲染失败: {str(e)}")
+
+    def _build_prompt(self, project: Project, storyboard: dict) -> str:
+        """
+        构建提示词
+        从PromptTemplate获取模板并使用Jinja2渲染
+        支持全局变量注入
+        """
+        return self._build_generation_prompt_payload(project, storyboard)['prompt']
+
+    def _resolve_generation_client_params(
+        self,
+        project: Project,
+        provider: ModelProvider,
+        runtime_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        template = self._get_prompt_template(project)
+        return resolve_stage_client_params(
+            self.stage_type,
+            template=template,
+            provider=provider,
+            runtime_overrides=runtime_overrides or {},
+        )
             
     def _generate_single_image(
         self,
         project: Project,
         storyboard: dict,
         provider: ModelProvider,
-        ratio: str = "9:16",
-        resolution: str = "2k"
+        ratio: Optional[str] = None,
+        resolution: Optional[str] = None
     ) -> Optional[GeneratedImage]:
         """
         为单个分镜生成图片
@@ -529,29 +749,48 @@ class Text2ImageStageProcessor(StageProcessor):
         try:
             # 准备生成参数
             # 构建提示词
-            prompt = self._build_prompt(project, storyboard)
-            model_name = provider.model_name
-            api_key = provider.api_key
-            api_url = provider.api_url
+            prompt_payload = self._build_generation_prompt_payload(project, storyboard)
+            prompt = prompt_payload['prompt']
+            runtime_overrides = {}
+            if ratio not in (None, ''):
+                runtime_overrides['ratio'] = ratio
+            if resolution not in (None, ''):
+                runtime_overrides['resolution'] = resolution
+
+            client_params = self._resolve_generation_client_params(
+                project,
+                provider,
+                runtime_overrides=runtime_overrides,
+            )
             generation_params = {
-                'model': model_name,
+                'model': provider.model_name,
                 'prompt': prompt,
-                'ratio': ratio,
-                'resolution': resolution
+                'image': prompt_payload['image'],
+                'ratio': client_params.get('ratio', ratio or '1:1'),
+                'resolution': client_params.get('resolution', resolution or '2k'),
+                'width': client_params.get('width', 1024),
+                'height': client_params.get('height', 1024),
+                'steps': client_params.get('steps', 20),
+                'negative_prompt': client_params.get('negative_prompt', ''),
+                'sample_count': client_params.get('sample_count', 1),
             }
-            height = provider.extra_config.get("height", "1024")
-            width = provider.extra_config.get("width", "1024")
             client = create_ai_client(provider)
-            # 调用generate (同步函数)
-            response = client.generate(
-                api_url=api_url,
-                session_id=api_key,
-                model=model_name,
-                prompt=prompt,
-                ratio=ratio,
-                resolution=resolution,
-                height=height,
-                width=width
+            response = ImageGenerationService.generate(
+                provider=provider,
+                client=client,
+                request=Text2ImageRequest(
+                    prompt=prompt,
+                    negative_prompt=client_params.get('negative_prompt', ''),
+                    reference_images=prompt_payload['image'],
+                    aspect_ratio=client_params.get('ratio', ratio or '1:1'),
+                    width=client_params.get('width', 1024),
+                    height=client_params.get('height', 1024),
+                    sample_count=client_params.get('sample_count', 1),
+                    extra={
+                        'resolution': client_params.get('resolution', resolution or '2k'),
+                        'steps': client_params.get('steps', 20),
+                    },
+                ),
             )
 
             if not response:

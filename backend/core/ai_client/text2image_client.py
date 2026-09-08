@@ -186,6 +186,12 @@ class Text2ImageClient(BaseText2ImageClient):
         if negative_prompt:
             content = f"{content}\n\n负面提示词：{negative_prompt.strip()}"
 
+        input_images = kwargs.get('image') or []
+        if isinstance(input_images, str):
+            input_images = [input_images]
+        elif not isinstance(input_images, list):
+            input_images = []
+
         request_url = api_url
         is_images_generations = self._is_images_generations_endpoint(request_url)
 
@@ -195,6 +201,8 @@ class Text2ImageClient(BaseText2ImageClient):
                 'prompt': content,
                 'size': size,
             }
+            if input_images:
+                payload['image'] = input_images
         else:
             payload = {
                 'model': model_name,
@@ -271,11 +279,12 @@ class Text2ImageClient(BaseText2ImageClient):
                         'width': width,
                         'height': height,
                         'steps': steps,
-                        'request_url': request_url,
-                        'created': result.get('created'),
-                        'usage': result.get('usage', {}),
-                    }
-                )
+                    'request_url': request_url,
+                    'input_image_count': len(input_images),
+                    'created': result.get('created'),
+                    'usage': result.get('usage', {}),
+                }
+            )
 
             if 'choices' not in result or not result['choices']:
                 return AIResponse(
@@ -321,6 +330,7 @@ class Text2ImageClient(BaseText2ImageClient):
                     'height': height,
                     'steps': steps,
                     'request_url': request_url,
+                    'input_image_count': len(input_images),
                     'response_id': result.get('id', ''),
                     'finish_reason': result['choices'][0].get('finish_reason'),
                     'usage': result.get('usage', {}),

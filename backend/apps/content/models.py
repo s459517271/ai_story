@@ -206,6 +206,21 @@ class CameraMovement(models.Model):
         verbose_name = '运镜'
         verbose_name_plural = '运镜'
 
+    def get_movement_description(self) -> str:
+        params = self.movement_params if isinstance(self.movement_params, dict) else {}
+        description = str(params.get('description') or '').strip()
+        if description:
+            return description
+        if self.prompt_used:
+            return self.prompt_used
+
+        parts = []
+        if self.movement_type:
+            parts.append(f"运镜类型: {self.movement_type}")
+        if params:
+            parts.append(f"运镜参数: {params}")
+        return '\n'.join(parts)
+
     def __str__(self):
         return f'{self.storyboard} - {self.get_movement_type_display() if self.movement_type else "未设置"}'
 

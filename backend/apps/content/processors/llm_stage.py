@@ -14,6 +14,7 @@ from jinja2 import Template, TemplateError
 from apps.models.models import ModelProvider
 from apps.projects.models import Project, ProjectStage
 from apps.prompts.models import PromptTemplate
+from apps.prompts.client_param_resolver import resolve_stage_client_params
 from apps.projects.utils import parse_storyboard_json
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,11 @@ class LLMStageProcessor(StageProcessor):
             # 获取AI客户端
             ai_client = self._get_ai_client(project)
             ai_client_config = ai_client.config
+            client_params = resolve_stage_client_params(
+                self.stage_type,
+                template=template,
+                provider=self._get_current_provider(project),
+            )
             # 构建提示词
             prompt = self._build_prompt(project, input_data)
 
@@ -165,8 +171,9 @@ class LLMStageProcessor(StageProcessor):
 
             # 根据阶段类型构建任务列表
             tasks = self._build_tasks(project, input_data)
-            max_tokens = ai_client_config.get("max_tokens", self._get_max_tokens())
-            temperature = ai_client_config.get("temperature", self._get_temperature())
+            max_tokens = client_params.get('max_tokens', ai_client_config.get("max_tokens", self._get_max_tokens()))
+            temperature = client_params.get('temperature', ai_client_config.get("temperature", self._get_temperature()))
+            top_p = client_params.get('top_p', ai_client_config.get('top_p', 1.0))
             for index, task in enumerate(tasks, 1):
                 # 流式生成
                 full_text = ""
@@ -174,7 +181,8 @@ class LLMStageProcessor(StageProcessor):
                     prompt=f'## 用户输入\n{task.get("user_prompt", "")}',
                     system_prompt=prompt,
                     max_tokens=max_tokens,
-                    temperature=temperature
+                    temperature=temperature,
+                    top_p=top_p,
                 ):
                     if chunk['type'] == 'token':
                         full_text = chunk['full_text']
@@ -556,8 +564,8 @@ class LLMStageProcessor(StageProcessor):
 
             provider = self._get_current_provider(project)
 
-            # 解析运镜文本(假设返回的是JSON格式)
-            movement_params = {'raw_text': generated_text}
+            # 运镜文本统一落到 description，兼容画布编辑与图生视频提示拼装。
+            movement_params = {'description': generated_text.strip()}
 
             # 保存运镜数据
             CameraMovement.objects.update_or_create(

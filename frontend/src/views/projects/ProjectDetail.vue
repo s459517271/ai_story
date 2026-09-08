@@ -23,6 +23,7 @@
           @pipeline-paused="handlePipelinePaused"
           @storyboard-generated="handleStoryboardGenerated"
           @asset-bindings-updated="handleAssetBindingsUpdated"
+          @template-updated="handleTemplateUpdated"
         />
       </div>
     </loading-container>
@@ -35,6 +36,8 @@ import LoadingContainer from '@/components/common/LoadingContainer.vue';
 import ProjectCanvas from '@/components/canvas/ProjectCanvas.vue';
 import { formatDate } from '@/utils/helpers';
 import { createProjectAllStagesSSE, createProjectStageSSE } from '@/services/sseService';
+import { buildProjectDetailAgentContext } from '@/services/pageAgent/contextBuilders';
+import { pageAgentActionRegistry } from '@/services/pageAgent/actionRegistry';
 
 export default {
   name: 'ProjectDetail',
@@ -43,6 +46,7 @@ export default {
     ProjectCanvas,
   },
   beforeRouteLeave(to, from, next) {
+    this.unregisterProjectAssistant(from?.params?.id);
     this.sseRecoveryEnabled = false;
     this.disconnectAllSSE({ clearMarkers: true });
     next();
@@ -65,6 +69,7 @@ export default {
   },
   watch: {
     '$route.params.id'(newId, oldId) {
+      this.unregisterProjectAssistant(oldId);
       this.sseRecoveryEnabled = true;
       this.disconnectAllSSE({ projectId: oldId, clearMarkers: true });
       this.fetchData();
@@ -74,6 +79,7 @@ export default {
     this.fetchData();
   },
   beforeDestroy() {
+    this.unregisterProjectAssistant();
     this.sseRecoveryEnabled = false;
     this.disconnectAllSSE({ clearMarkers: true });
   },
@@ -91,6 +97,123 @@ export default {
       'updateCameraMovement'
     ]),
     formatDate,
+
+    getAssistantScopeKey(projectId = this.project?.id || this.$route.params.id) {
+      return `project_detail:${projectId}`;
+    },
+
+    unregisterProjectAssistant(projectId = this.project?.id || this.$route.params.id) {
+      pageAgentActionRegistry.unregister(this.getAssistantScopeKey(projectId));
+    },
+
+    registerProjectAssistant() {
+      const context = buildProjectDetailAgentContext({
+        route: this.$route,
+        project: this.project,
+        stages: this.stages,
+        seriesEpisodes: this.seriesEpisodes,
+      });
+
+      this.$store.dispatch('assistant/registerContext', context);
+      this.registerProjectAssistantActions(context.scopeKey);
+    },
+
+    registerProjectAssistantActions(scopeKey) {
+      pageAgentActionRegistry.register(scopeKey, {
+        focus_stage: async ({ stageType }) => {
+          const nodeKey = this.resolveStageNodeKey(stageType);
+          if (!nodeKey) {
+            throw new Error('当前阶段还没有可定位的节点');
+          }
+          this.$refs.projectCanvas?.focusCanvasNode(nodeKey);
+          return `已定位到${this.getStageDisplayName(stageType)}区域。`;
+        },
+        focus_storyboard: async ({ storyboardId }) => {
+          const nodeKey = this.resolveStoryboardNodeKey(storyboardId);
+          if (!nodeKey) {
+            throw new Error('当前还没有可定位的分镜');
+          }
+          this.$refs.projectCanvas?.focusCanvasNode(nodeKey);
+          return '已定位到目标分镜。';
+        },
+        open_storyboard_chat: async ({ storyboardId }) => {
+          const targetId = storyboardId || this.storyboards[0]?.id;
+          if (!targetId) {
+            throw new Error('当前没有可微调的分镜');
+          }
+          this.$refs.projectCanvas?.handleOpenStoryboardChat({ storyboardId: targetId });
+          return '已打开分镜微调助手。';
+        },
+        open_camera_chat: async ({ cameraId, storyboardId }) => {
+          const targetStoryboard = storyboardId || this.storyboards.find((item) => item.camera_movement?.data?.id)?.id;
+          const targetCameraId = cameraId || this.storyboards.find((item) => item.camera_movement?.data?.id)?.camera_movement?.data?.id;
+          if (!targetStoryboard || !targetCameraId) {
+            throw new Error('当前还没有可微调的运镜内容');
+          }
+          this.$refs.projectCanvas?.handleOpenCameraChat({
+            cameraId: targetCameraId,
+            storyboardId: targetStoryboard,
+          });
+          return '已打开运镜微调助手。';
+        },
+        run_pipeline: async () => {
+          await this.$refs.projectCanvas?.handleRunPipeline();
+          return '已触发运行流程。';
+        },
+        pause_pipeline: async () => {
+          await this.$refs.projectCanvas?.handlePausePipeline();
+          return '已触发暂停流程。';
+        },
+        resume_pipeline: async () => {
+          await this.$refs.projectCanvas?.handleResumePipeline();
+          return '已触发恢复流程。';
+        },
+        refresh_canvas: async () => {
+          await this.refreshCanvasData();
+          return '画布已刷新，数据已更新。';
+        },
+      });
+    },
+
+    resolveStoryboardNodeKey(storyboardId) {
+      if (!this.storyboards.length) {
+        return '';
+      }
+      const targetIndex = storyboardId
+        ? this.storyboards.findIndex((item) => item.id === storyboardId)
+        : 0;
+      if (targetIndex < 0) {
+        return '';
+      }
+      return `storyboard-${targetIndex}`;
+    },
+
+    resolveStageNodeKey(stageType) {
+      if (stageType === 'storyboard') {
+        return this.resolveStoryboardNodeKey();
+      }
+
+      const stageMap = {
+        rewrite: 'rewrite',
+        asset_extraction: 'assetExtraction',
+      };
+
+      return stageMap[stageType] || '';
+    },
+
+    getStageDisplayName(stageType) {
+      const stageMap = {
+        rewrite: '改写',
+        asset_extraction: '资产提取',
+        storyboard: '分镜',
+        image_generation: '图片生成',
+        multi_grid_image: '多图生成',
+        image_edit: '图片编辑',
+        camera_movement: '运镜',
+        video_generation: '视频生成',
+      };
+      return stageMap[stageType] || stageType || '当前';
+    },
 
     getPipelineSSEStorageKey(projectId = this.project?.id || this.$route.params.id) {
       return `project_active_pipeline_sse:${projectId}`;
@@ -154,6 +277,8 @@ export default {
         if (this.sseRecoveryEnabled) {
           this.restoreSSEIfNeeded();
         }
+
+        this.registerProjectAssistant();
 
         // 恢复滚动位置
         if (preserveScroll) {
@@ -403,6 +528,7 @@ export default {
         this.project = await this.fetchProject(projectId);
         this.stages = await this.fetchProjectStages(projectId);
         this.fetchStoryboardsFromStages();
+        this.registerProjectAssistant();
 
         if (!this.hasRunningStage()) {
           this.clearStageSSEMarker();
@@ -573,6 +699,13 @@ export default {
         await this.refreshCanvasData();
       } catch (error) {
         console.error('[ProjectDetail] 刷新项目资产绑定失败:', error);
+      }
+    },
+    async handleTemplateUpdated() {
+      try {
+        await this.refreshCanvasData();
+      } catch (error) {
+        console.error('[ProjectDetail] 刷新模板相关画布数据失败:', error);
       }
     },
 

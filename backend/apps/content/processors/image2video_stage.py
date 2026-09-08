@@ -18,6 +18,7 @@ from pathlib import Path
 
 from apps.models.models import ModelProvider
 from apps.projects.models import Project, ProjectStage
+from apps.prompts.client_param_resolver import resolve_stage_client_params
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +428,16 @@ class Image2VideoStageProcessor(StageProcessor):
             image_url = image_urls[0].get("url", "") if image_urls else ""
             image_base64 = storyboard.get("url", "")
             camera_movement_description = self._build_camera_movement_description(project, scene_number)
+            template = self._get_prompt_template(project)
+            client_params = resolve_stage_client_params(
+                self.stage_type,
+                template=template,
+                provider=provider,
+                runtime_overrides={
+                    'poll_interval': self.poll_interval,
+                    'max_wait_time': self.max_wait_time,
+                },
+            )
 
             client = create_ai_client(provider)
             generate_kwargs = {
@@ -435,6 +446,14 @@ class Image2VideoStageProcessor(StageProcessor):
                 'model': model_name,
                 'prompt': prompt,
                 'camera_movement_description': camera_movement_description,
+                'duration': client_params.get('duration', 5),
+                'duration_seconds': client_params.get('duration', 5),
+                'fps': client_params.get('fps', 24),
+                'aspect_ratio': client_params.get('aspect_ratio', '16:9'),
+                'resolution': client_params.get('resolution') or None,
+                'negative_prompt': client_params.get('negative_prompt', ''),
+                'poll_interval': client_params.get('poll_interval', self.poll_interval),
+                'max_wait_time': client_params.get('max_wait_time', self.max_wait_time),
             }
             if image_base64:
                 generate_kwargs['image_base64'] = image_base64
@@ -467,18 +486,7 @@ class Image2VideoStageProcessor(StageProcessor):
         if not camera_movement:
             return ''
 
-        raw_text = camera_movement.movement_params.get('raw_text', '')
-        if raw_text:
-            return raw_text
-        if camera_movement.prompt_used:
-            return camera_movement.prompt_used
-
-        parts = []
-        if camera_movement.movement_type:
-            parts.append(f"运镜类型: {camera_movement.movement_type}")
-        if camera_movement.movement_params:
-            parts.append(f"运镜参数: {camera_movement.movement_params}")
-        return '\n'.join(parts)
+        return camera_movement.get_movement_description()
 
     def _get_prompt_template(self, project: Project):
         """获取提示词模板"""

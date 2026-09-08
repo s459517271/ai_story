@@ -213,7 +213,7 @@ export default {
       );
     },
     getMovementDescription(params) {
-      return params?.description || params?.raw_text || '';
+      return params?.description || '';
     },
     handleChatEdit() {
       if (!this.cameraId) {
@@ -276,7 +276,7 @@ export default {
       if (descriptionChanged) {
         data.movement_params = {
           ...this.movementParams,
-          description: this.localDescription
+          description: this.localDescription.trim()
         };
       }
 

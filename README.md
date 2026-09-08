@@ -1,6 +1,15 @@
 # AI Story - AI驱动的故事视频自动化生成平台
 
-![logo](logo.png)
+[English Version](README_EN.md)
+
+![logo](docs/images/logo.png)
+
+<div class="column" align="middle">
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11-blue.svg" alt=""></a>
+   <img src="https://img.shields.io/github/stars/xhongc/ai_story?color=informational&label=Stars">
+  <img src="https://img.shields.io/docker/pulls/xhongc/ai_story-backend" alt="docker-pull-count" />
+  <img src="https://img.shields.io/badge/platform-amd64/arm64-pink?style=plastic" alt="docker-platform" />
+</div>
 
 
 > 🎬 **从文案到视频，一键生成** - 让AI帮你创作专业的故事视频
@@ -11,13 +20,90 @@ AI Story 是一个基于人工智能的故事视频自动化生成平台。只�
 
 ---
 
+## 💎 Sponsors赞助商
+
+<table>
+  <tr>
+    <td width="190" align="center">
+      <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener"><img src="docs/images/sota.jpg" width="163" alt="秘塔科技 MetaSota"></a>
+    </td>
+    <td>
+      <strong>MiniMax H3 视频生成 API｜秘塔科技</strong> 秘塔科技提供高性价比的 MiniMax H3 视频生成服务：<strong>768P 仅 0.09 元/秒，2K 仅 0.15 元/秒</strong>。支持原生 2K、音画同步，API 兼容 <strong>OpenAI 协议</strong>，同时支持 <strong>ComfyUI</strong>，无需自行部署 GPU。 🎁 通过 <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener noreferrer">AI
+      _STORY专属链接注册</a>，即可领取赠送额度及专属优惠。
+    </td>
+  </tr>
+  <tr>
+    <td width="190" align="center">
+      <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener"><img src="docs/images/5g.png" width="163" alt="AI 超级工厂"></a>
+    </td>
+    <td>
+      <strong>AI 超级工厂聚合多款模型</strong> 驱动无限可能,一站式 AI 模型 API 聚合平台，兼容 OpenAI 接口标准，<strong>兼容 OpenAI 接口标准，
+支持 GPT-5 / Claude 4.7 / DeepSeek / Gemini 等百余款主流模型 <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener noreferrer">
+    </td>
+  </tr>
+</table>
+
+---
 ## 🚀 快速开始
 
 ### 使用 Docker Compose 一键启动
+本地创建一个 compose yml 文件
+```yml
+services:
+
+  # Redis缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+
+  # Django后端
+  backend:
+    image: xhongc/ai_story-backend
+    restart: unless-stopped
+    volumes:
+      - ./data/backend:/app/backend/data
+      - ./storage:/app/storage
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+
+  # Celery Worker
+  celery:
+    image: xhongc/ai_story-backend
+    working_dir: /app/backend
+    command: celery -A config worker -l info -P gevent
+    restart: unless-stopped
+    volumes:
+      - ./data/backend:/app/backend/data
+      - ./storage:/app/storage
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+
+  # Vue前端
+  frontend:
+    image: xhongc/ai_story-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+```
+
+> 注意：Celery 服务需要在 `/app/backend` 目录下启动，否则会报 `Unable to load celery application. The module config was not found.`。
 
 ```bash
 # 启动所有服务
 docker-compose up -d
+
+或者
+
+docker compose up -d
 
 # 创建管理员账号
 docker-compose exec backend python backend/manage.py createsuperuser
@@ -25,22 +111,22 @@ docker-compose exec backend python backend/manage.py createsuperuser
 
 **访问地址:**
 - 前端应用: http://localhost:3000
-- 后端管理: http://localhost:8010
-
 ---
 
 ## 界面预览
 
-![视频生成](image-11.png)
-![视频生成](image-12.png)
-![视频生成](image-13.png)
-![视频生成](image-3.png)
-![视频生成](image-4.png)
-![视频生成](image-5.png)
+![视频生成](docs/images/image-11.png)
+![视频生成](docs/images/image-12.png)
+![视频生成](docs/images/image-13.png)
+![视频生成](docs/images/image-3.png)
+![视频生成](docs/images/image-4.png)
+![视频生成](docs/images/image-5.png)
 
 
 **导演模式** - 正在开发中，支持更精细的分镜和视频控制
-![导演模式界面](image2.png)
+![导演模式界面](docs/images/image14.png)
+![导演模式界面](docs/images/image15.png)
+![导演模式界面](docs/images/image16.png)
 
 **成品视频效果** - 视频号搜索：小小方圆669
 
@@ -164,13 +250,19 @@ AI分析每个场景，自动生成合适的镜头运动方案。
 - 🎬 **视频原型** - 快速制作视频脚本原型和分镜预览
 
 ---
+## 场景灵感
+- 娃听完上次编的故事死活不睡，我偷摸用了这个万能睡前故事库。
 
-## 开发文档
+- 把孩子的涂鸦变成一本10页的绘本，当了妈才知道这个功能有多香。
 
-详细的技术文档和开发指南请查看：
-- [开发者指南](CLAUDE.md) - 完整的开发文档和命令参考
+- 我把我家猫写成了一部宫斗大剧，真的笑拥了。
 
----
+- 5分钟生成一条画面绝美的微短剧，原来做导演从没那么简单过！
+
+- 恋爱纪念日礼物我送了本我们自己的小说，效果炸了。
+
+- 我把我的离谱梦境喂给AI，它给我生成了一本盗梦空间2.0。
+
 
 ## 许可证
 
@@ -186,15 +278,15 @@ AI分析每个场景，自动生成合适的镜头运动方案。
 
 ## 联系方式
 <div>
-<img  src="/wc.jpg" width="250">  &nbsp;
+<img  src="docs/images/img0402.jpg" width="250">  &nbsp;
 </div>
 
 - 视频号：小小方圆669
 
 - 作者微信：charlesnowed （添加好友请备注 **AI Story**）
 
+- [TG发布频道](https://t.me/+YwhET7N5a0E3M2E1)
+
+- [TG交流群](https://t.me/+HHlaG6o3hYFjYjI1)
+
 - 项目地址：https://github.com/xhongc/ai_story
-
-
-uv run celery -A config worker -l info -P gevent
-

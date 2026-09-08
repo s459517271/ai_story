@@ -16,6 +16,7 @@ wheels/
 # Django
 *.log
 db.sqlite3
+ai_story.db
 db.sqlite3-journal
 /staticfiles/
 /media/
@@ -50,3 +51,14 @@ npm-debug.log
 yarn-error.log
 /storage/
 /backend/storage/image/
+/backend/media
+
+backend/apps/agent/**
+backend/apps/mcp/**
+!backend/apps/agent/**/
+!backend/apps/mcp/**/
+!backend/apps/agent/**/*.so
+!backend/apps/mcp/**/*.so
+!backend/apps/agent/.gitkeep
+!backend/apps/mcp/.gitkeep
+backend/apps/workflows/**

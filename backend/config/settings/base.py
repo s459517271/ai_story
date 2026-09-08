@@ -39,6 +39,10 @@ INSTALLED_APPS = [
     'apps.content',
     'apps.users',
     'apps.mock_api',
+    'apps.agent',
+    'apps.mcp',
+    'apps.ai_proxy',
+    'apps.scripts',
 ]
 
 MIDDLEWARE = [
@@ -76,7 +80,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.getenv('SQLITE_DB_PATH', str(BASE_DIR / 'data' / 'ai_story.db')),
     }
 }
 
@@ -144,7 +148,25 @@ REDIS_PUBSUB_URL = os.getenv('REDIS_PUBSUB_URL', f'redis://{REDIS_HOST}:{REDIS_P
 
 # CORS配置
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = ["http://127.0.0.1:3000"]
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+AGENT_SERVER_BASE_URL = os.getenv('AGENT_SERVER_BASE_URL', 'http://127.0.0.1:9002').strip()
+AGENT_SERVER_USERNAME = os.getenv('AGENT_SERVER_USERNAME', 'opencode').strip()
+AGENT_SERVER_PASSWORD = os.getenv('AGENT_SERVER_PASSWORD', '').strip()
+MCP_ACCESS_TOKEN = os.getenv('MCP_ACCESS_TOKEN', 'test').strip()
+AGENT_MODEL_PROVIDER_ID = os.getenv('AGENT_MODEL_PROVIDER_ID', 'opencode').strip()
+AGENT_MODEL_ID = os.getenv('AGENT_MODEL_ID', 'big-pickle').strip()
+AGENT_MODEL_VARIANT = os.getenv('AGENT_MODEL_VARIANT', '').strip()
+AGENT_REMOTE_AGENT_NAME = os.getenv('AGENT_REMOTE_AGENT_NAME', 'build').strip()
+AGENT_SHOW_FREE_MODELS = os.getenv('AGENT_SHOW_FREE_MODELS', 'false').strip()
+OPENCODE_CONFIG_FILE = os.getenv('OPENCODE_CONFIG_FILE', str(Path.home() / '.config' / 'opencode' / 'opencode.json')).strip()
+OPENCODE_MANAGED_PROVIDER_PREFIX = os.getenv('OPENCODE_MANAGED_PROVIDER_PREFIX', 'ai_story').strip()
+OPENCODE_DEFAULT_PROVIDER_NPM = os.getenv('OPENCODE_DEFAULT_PROVIDER_NPM', '@ai-sdk/openai-compatible').strip()
 
 # JWT配置
 SIMPLE_JWT = {

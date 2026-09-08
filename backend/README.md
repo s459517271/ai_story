@@ -69,6 +69,24 @@ cp ../.env.example ../.env
 # 编辑.env文件,配置必要的环境变量
 ```
 
+
+### 页面助手 / OpenCode 配置
+
+如果你启用了页面助手，并通过 opencode serve 提供模型能力，可以在 `.env` 中增加以下配置：
+
+```bash
+AGENT_SERVER_BASE_URL=http://127.0.0.1:9002
+AGENT_SERVER_USERNAME=opencode
+AGENT_SERVER_PASSWORD=
+AGENT_MODEL_PROVIDER_ID=opencode
+AGENT_MODEL_ID=big-pickle
+AGENT_MODEL_VARIANT=
+AGENT_REMOTE_AGENT_NAME=build
+AGENT_SHOW_FREE_MODELS=false
+```
+
+其中 `AGENT_SHOW_FREE_MODELS=true` 时，页面助手模型列表会额外显示内置免费模型，包括 `Big Pickle`、`MiMo V2 Pro Free`、`MiMo V2 Omni Free`、`Qwen3.6 Plus Free`、`Nemotron 3 Super Free`、`MiniMax M2.5 Free`。
+
 ### 3. 初始化数据库
 
 ```bash
@@ -112,9 +130,22 @@ docker-compose exec backend python manage.py migrate
 # 创建超级用户
 docker-compose exec backend python manage.py createsuperuser
 
+# 编译闭源应用为 so/pyd，并保留源码
+docker-compose exec backend sh -c 'cd /app/backend && python manage.py setup_in_docker'
+
 # 停止服务
 docker-compose down
 ```
+
+## 编译 agent / mcp 模块
+
+如果需要只对 `apps.agent` 和 `apps.mcp` 生成编译产物，可在后端环境中执行：
+
+```bash
+python manage.py setup_in_docker
+```
+
+该命令只会扫描 `backend/apps/agent` 和 `backend/apps/mcp`，生成 `.so`/`.pyd` 文件，清理中间 `build/` 与 `.c` 文件，但不会删除原始 `.py` 源码。
 
 ## 核心设计原则
 

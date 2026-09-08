@@ -109,9 +109,11 @@
           <span class="meta-value">{{ formatDate(project.updated_at) }}</span>
         </div>
 
-        <div
+        <button
           v-if="project.prompt_set_name"
-          class="meta-item ui-chip-block"
+          type="button"
+          class="meta-item ui-chip-block template-chip"
+          @click.stop="openTemplateDrawer()"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -129,7 +131,7 @@
           </svg>
           <span class="meta-label">模板:</span>
           <span class="meta-value">{{ project.prompt_set_name }}</span>
-        </div>
+        </button>
 
         <div class="ui-chip-block ui-action-chip">
           <button
@@ -257,6 +259,82 @@
 
       <transition name="episode-dropdown">
         <div
+          v-if="showTemplateDrawer"
+          ref="templateDrawer"
+          class="template-drawer-card prevent-canvas-wheel"
+          @click.stop
+        >
+          <div class="template-drawer-header">
+            <div>
+              <div class="template-drawer-title">
+                修改模板
+              </div>
+              <div class="template-drawer-subtitle">
+                直接在画布中维护当前提示词集的阶段模板。
+              </div>
+            </div>
+            <button
+              class="btn btn-ghost btn-xs"
+              @click.stop="closeTemplateDrawer"
+            >
+              关闭
+            </button>
+          </div>
+
+          <div
+            v-if="templateDrawerLoading && !templateDrawerActiveTemplateId"
+            class="template-drawer-empty"
+          >
+            正在加载模板...
+          </div>
+          <template v-else>
+            <div class="template-drawer-stage-tabs">
+              <button
+                v-for="stage in editableTemplateStages"
+                :key="stage.value"
+                type="button"
+                class="template-stage-tab"
+                :class="{ active: stage.value === selectedTemplateStage }"
+                @click="handleTemplateStageSelect(stage.value)"
+              >
+                <span>{{ stage.label }}</span>
+                <span class="template-stage-status">{{ getTemplateStageStatus(stage.value) }}</span>
+              </button>
+            </div>
+
+            <div
+              v-if="templateDrawerError"
+              class="template-drawer-empty is-error"
+            >
+              {{ templateDrawerError }}
+            </div>
+            <div
+              v-else-if="selectedTemplateStage && !templateDrawerActiveTemplateId"
+              class="template-drawer-empty"
+            >
+              当前阶段还没有模板，暂不支持在画布中直接创建。
+            </div>
+            <PromptTemplateForm
+              v-else-if="templateDrawerActiveTemplateId"
+              :key="templateDrawerFormKey"
+              :template-id="templateDrawerActiveTemplateId"
+              :initial-template-set="project.prompt_template_set"
+              :initial-stage-type="selectedTemplateStage"
+              :lock-template-set="true"
+              :lock-stage-type="true"
+              :show-cancel="false"
+              submit-text="保存模板"
+              toolbar-title="当前阶段模板"
+              toolbar-hint="保存后会刷新画布，当前流程节点会继续复用最新模板。"
+              @loaded="handleTemplateLoaded"
+              @saved="handleTemplateSaved"
+            />
+          </template>
+        </div>
+      </transition>
+
+      <transition name="episode-dropdown">
+        <div
           v-if="showAssetDrawer"
           ref="assetDrawer"
           class="asset-drawer-card prevent-canvas-wheel"
@@ -299,6 +377,7 @@
               v-for="asset in availableAssets"
               :key="asset.id"
               class="asset-drawer-item"
+              :class="{ 'is-image': asset.variable_type === 'image' }"
             >
               <input
                 :checked="selectedAssetIds.includes(asset.id)"
@@ -306,6 +385,24 @@
                 class="checkbox checkbox-sm"
                 @change.stop="handleAssetBindingToggle(asset.id)"
               >
+              <div
+                v-if="asset.variable_type === 'image'"
+                class="asset-drawer-preview"
+                @click.stop="asset.image_url && previewAssetImage(asset.image_url)"
+              >
+                <img
+                  v-if="asset.image_url"
+                  :src="asset.image_url"
+                  :alt="asset.key"
+                  class="asset-drawer-preview-image"
+                >
+                <div
+                  v-else
+                  class="asset-drawer-preview-placeholder"
+                >
+                  暂无图片
+                </div>
+              </div>
               <div class="asset-drawer-meta">
                 <div class="asset-drawer-key-row">
                   <code class="asset-drawer-key">{{ asset.key }}</code>
@@ -315,6 +412,12 @@
                   >{{ asset.group }}</span>
                 </div>
                 <div class="asset-drawer-type">{{ asset.variable_type_display }} · {{ asset.scope_display }}</div>
+                <div
+                  v-if="asset.description"
+                  class="asset-drawer-description"
+                >
+                  {{ asset.description }}
+                </div>
               </div>
             </label>
           </div>
@@ -495,6 +598,35 @@
       </flow-canvas>
     </div>
 
+    <div
+      v-if="assetPreviewImageUrl"
+      class="modal modal-open"
+      @click="assetPreviewImageUrl = null"
+    >
+      <div
+        class="modal-box max-w-4xl"
+        @click.stop
+      >
+        <img
+          :src="assetPreviewImageUrl"
+          alt="资产预览"
+          class="w-full"
+        >
+        <div class="modal-action">
+          <button
+            class="btn"
+            @click="assetPreviewImageUrl = null"
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+      <div
+        class="modal-backdrop"
+        @click="assetPreviewImageUrl = null"
+      />
+    </div>
+
     <node-chat-drawer
       ref="nodeChatDrawer"
       :visible="nodeChat.visible"
@@ -529,8 +661,10 @@ import VideoGenNode from './VideoGenNode.vue';
 import NodeChatDrawer from './NodeChatDrawer.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import JianyingDraftButton from '@/components/projects/JianyingDraftButton.vue';
+import PromptTemplateForm from '@/components/prompts/PromptTemplateForm.vue';
 import projectsAPI from '@/api/projects';
 import store from '@/store';
+import { promptTemplateAPI, STAGE_TYPES } from '@/api/prompts';
 import { formatDate } from '@/utils/helpers';
 
 export default {
@@ -547,7 +681,8 @@ export default {
     VideoGenNode,
     NodeChatDrawer,
     StatusBadge,
-    JianyingDraftButton
+    JianyingDraftButton,
+    PromptTemplateForm
   },
   props: {
     project: {
@@ -603,6 +738,7 @@ export default {
       showAssetDrawer: false,
       availableAssets: [],
       selectedAssetIds: [],
+      assetPreviewImageUrl: null,
       runtimeMediaDimensions: {},
       measuredNodeHeights: {},
       pendingMeasuredHeights: {},
@@ -612,6 +748,14 @@ export default {
       switchingEpisodeId: null,
       episodeSearch: '',
       highlightedEpisodeIndex: 0,
+      showTemplateDrawer: false,
+      templateDrawerLoading: false,
+      templateDrawerError: '',
+      templateDrawerTemplates: [],
+      templateDrawerActiveTemplateId: null,
+      templateDrawerFormKey: 0,
+      selectedTemplateStage: '',
+      loadedTemplate: null,
       nodeChat: {
         visible: false,
         type: '',
@@ -649,6 +793,14 @@ export default {
         const seriesName = episode.series_name || '';
         return label.toLowerCase().includes(keyword) || seriesName.toLowerCase().includes(keyword);
       });
+    },
+    editableTemplateStages() {
+      const enabledStageTypes = new Set(
+        this.templateDrawerTemplates
+          .filter((template) => template.is_active !== false)
+          .map((template) => template.stage_type)
+      );
+      return STAGE_TYPES.filter((stage) => enabledStageTypes.has(stage.value));
     },
     pipelineActionType() {
       if (this.project?.status === 'processing') {
@@ -932,7 +1084,7 @@ export default {
       return [
         `关联分镜：${storyboard.scene_description || `分镜 ${storyboard.sequence_number}`}`,
         `运镜类型：${camera.movement_type || '暂无'}`,
-        `运镜描述：${movementParams.description || movementParams.raw_text || '暂无'}`,
+        `运镜描述：${movementParams.description || '暂无'}`,
       ].join('\n');
     },
     nodeChatQuickActions() {
@@ -1327,6 +1479,83 @@ export default {
     closeEpisodeMenu() {
       this.showEpisodeMenu = false;
     },
+    async openTemplateDrawer() {
+      if (!this.project?.prompt_template_set) {
+        this.$message?.warning('当前项目未绑定提示词集');
+        return;
+      }
+
+      this.showTemplateDrawer = true;
+      this.templateDrawerError = '';
+      this.templateDrawerLoading = true;
+      this.loadedTemplate = null;
+
+      try {
+        const response = await promptTemplateAPI.getList({
+          template_set: this.project.prompt_template_set,
+          page_size: 100,
+        });
+        const templates = response.results || response || [];
+        this.templateDrawerTemplates = templates;
+
+        const enabledTemplates = templates.filter((template) => template.is_active !== false);
+        if (!enabledTemplates.length) {
+          this.templateDrawerError = '当前提示词集下暂无已启用模板';
+          this.selectedTemplateStage = '';
+          this.templateDrawerActiveTemplateId = null;
+          return;
+        }
+
+        const preferredStage = this.selectedTemplateStage && enabledTemplates.some(
+          (template) => template.stage_type === this.selectedTemplateStage
+        )
+          ? this.selectedTemplateStage
+          : enabledTemplates[0].stage_type;
+
+        this.handleTemplateStageSelect(preferredStage);
+      } catch (error) {
+        console.error('[ProjectCanvas] 加载模板列表失败:', error);
+        this.templateDrawerError = error.response?.data?.detail || '模板加载失败,请稍后重试';
+        this.templateDrawerActiveTemplateId = null;
+      } finally {
+        this.templateDrawerLoading = false;
+      }
+    },
+    closeTemplateDrawer() {
+      this.showTemplateDrawer = false;
+    },
+    handleTemplateStageSelect(stageType) {
+      this.selectedTemplateStage = stageType;
+      const template = this.templateDrawerTemplates.find((item) => item.stage_type === stageType);
+      this.templateDrawerActiveTemplateId = template?.id || null;
+      this.templateDrawerFormKey += 1;
+      this.loadedTemplate = template || null;
+    },
+    getTemplateStageStatus(stageType) {
+      const template = this.templateDrawerTemplates.find((item) => item.stage_type === stageType);
+      if (!template) {
+        return '未配置';
+      }
+      return '已启用';
+    },
+    handleTemplateLoaded(template) {
+      this.loadedTemplate = template;
+    },
+    handleTemplateSaved(template) {
+      const stageType = template?.stage_type || this.selectedTemplateStage;
+      const existingIndex = this.templateDrawerTemplates.findIndex((item) => item.id === template.id);
+      if (existingIndex === -1) {
+        this.templateDrawerTemplates = [template, ...this.templateDrawerTemplates];
+      } else {
+        this.templateDrawerTemplates = this.templateDrawerTemplates.map((item) => (
+          item.id === template.id ? template : item
+        ));
+      }
+      this.templateDrawerActiveTemplateId = template.id;
+      this.loadedTemplate = template;
+      this.$message?.success('模板已更新');
+      this.$emit('template-updated', { template, stageType });
+    },
     moveEpisodeHighlight(step) {
       if (!this.filteredEpisodes.length) {
         return;
@@ -1346,6 +1575,14 @@ export default {
 
       if (this.showEpisodeMenu && !this.$el.contains(target)) {
         this.closeEpisodeMenu();
+      }
+
+      if (this.showTemplateDrawer) {
+        const drawer = this.$refs.templateDrawer;
+        const clickedInsideDrawer = drawer && drawer.contains(target);
+        if (!clickedInsideDrawer) {
+          this.closeTemplateDrawer();
+        }
       }
 
       if (this.showAssetDrawer) {
@@ -1624,6 +1861,10 @@ export default {
     async handleAssetExtractionBindingsUpdated() {
       await this.loadProjectAssets();
       this.$emit('asset-bindings-updated');
+    },
+
+    previewAssetImage(url) {
+      this.assetPreviewImageUrl = url;
     },
 
     async handleAssetBindingToggle(assetId) {
@@ -2748,12 +2989,28 @@ export default {
   text-align: center;
 }
 
+.template-chip {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.template-chip:hover {
+  border-color: rgba(20, 184, 166, 0.45);
+  box-shadow: 0 12px 24px rgba(20, 184, 166, 0.14);
+  transform: translateY(-1px);
+}
+
+.layout-shell.theme-dark .template-chip {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.template-drawer-card,
 .asset-drawer-card {
   position: absolute;
-  top: calc(100% + 0.75rem);
+  top: calc(100% + 0.35rem);
   right: 0;
-  width: 360px;
-  max-height: 420px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2767,12 +3024,24 @@ export default {
   pointer-events: auto;
 }
 
+.template-drawer-card {
+  width: min(720px, calc(100vw - 2.5rem));
+  max-height: min(82vh, 920px);
+}
+
+.asset-drawer-card {
+  width: 360px;
+  max-height: 420px;
+}
+
+.layout-shell.theme-dark .template-drawer-card,
 .layout-shell.theme-dark .asset-drawer-card {
   background: rgba(15, 23, 42, 0.96);
   border-color: rgba(148, 163, 184, 0.2);
   box-shadow: 0 20px 40px rgba(2, 6, 23, 0.72);
 }
 
+.template-drawer-header,
 .asset-drawer-header {
   display: flex;
   align-items: flex-start;
@@ -2781,21 +3050,105 @@ export default {
   margin-bottom: 0.75rem;
 }
 
+.template-drawer-title,
 .asset-drawer-title {
   font-size: 0.95rem;
   font-weight: 700;
   color: #0f172a;
 }
 
+.layout-shell.theme-dark .template-drawer-title,
 .layout-shell.theme-dark .asset-drawer-title {
   color: #e2e8f0;
 }
 
+.template-drawer-subtitle,
 .asset-drawer-subtitle {
   margin-top: 0.2rem;
   font-size: 0.76rem;
   color: #64748b;
 }
+
+.template-drawer-stage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.8rem;
+}
+
+.template-stage-tab {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  align-items: flex-start;
+  min-width: 92px;
+  padding: 0.5rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+  color: #0f172a;
+  transition: all 0.2s ease;
+  font-size: 0.82rem;
+}
+
+.template-stage-tab:hover {
+  border-color: rgba(20, 184, 166, 0.28);
+  box-shadow: 0 10px 22px rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px);
+}
+
+.template-stage-tab.active {
+  border-color: rgba(20, 184, 166, 0.38);
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.92), rgba(236, 253, 245, 0.8));
+  box-shadow: 0 12px 28px rgba(20, 184, 166, 0.14);
+}
+
+.layout-shell.theme-dark .template-stage-tab {
+  background: rgba(15, 23, 42, 0.84);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.layout-shell.theme-dark .template-stage-tab.active {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.32), rgba(17, 94, 89, 0.28));
+  border-color: rgba(94, 234, 212, 0.36);
+}
+
+.template-stage-status {
+  font-size: 0.64rem;
+  line-height: 1.1;
+  color: #64748b;
+}
+
+.template-drawer-empty,
+.asset-drawer-empty {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.template-drawer-empty {
+  padding: 1rem 0.25rem 0.75rem;
+  text-align: center;
+}
+
+.template-drawer-empty.is-error {
+  color: #dc2626;
+}
+
+.template-drawer-card :deep(.prompt-template-form) {
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.template-drawer-card :deep(.card) {
+  margin-bottom: 0;
+  border-radius: 18px;
+}
+
+.template-drawer-card :deep(.template-form-toolbar) {
+  margin-bottom: 0.1rem;
+}
+
 
 .asset-drawer-list {
   display: flex;
@@ -2817,6 +3170,47 @@ export default {
   transition: all 0.2s ease;
 }
 
+.asset-drawer-item.is-image {
+  align-items: stretch;
+}
+
+.asset-drawer-preview {
+  width: 84px;
+  min-width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(226, 232, 240, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  cursor: zoom-in;
+}
+
+.layout-shell.theme-dark .asset-drawer-preview {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.asset-drawer-preview-image,
+.asset-drawer-preview-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.asset-drawer-preview-image {
+  display: block;
+  object-fit: cover;
+}
+
+.asset-drawer-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
 .layout-shell.theme-dark .asset-drawer-item {
   background: rgba(15, 23, 42, 0.84);
   border-color: rgba(148, 163, 184, 0.18);
@@ -2830,6 +3224,7 @@ export default {
 
 .asset-drawer-meta {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 0;
@@ -2864,15 +3259,15 @@ export default {
   color: #99f6e4;
 }
 
-.asset-drawer-type,
-.asset-drawer-empty {
+.asset-drawer-type {
   font-size: 0.76rem;
   color: #64748b;
 }
 
-.asset-drawer-empty {
-  padding: 1rem 0.25rem 0.5rem;
-  text-align: center;
+.asset-drawer-description {
+  font-size: 0.74rem;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 .meta-item {
@@ -2984,6 +3379,11 @@ export default {
 
   .episode-dropdown {
     width: min(340px, calc(100vw - 2.5rem));
+  }
+
+  .template-drawer-card {
+    width: calc(100vw - 2.5rem);
+    max-height: 78vh;
   }
 
   .asset-drawer-card {

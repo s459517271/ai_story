@@ -335,7 +335,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             'narration_text': storyboard.narration_text or '',
             'image_prompt': storyboard.image_prompt or '',
             'movement_type': camera.movement_type or '',
-            'movement_params': camera.movement_params or {},
+            'movement_params': camera.movement_params,
         }
 
     def _resolve_node_chat_target(self, project, node_type, node_id):

@@ -29,19 +29,20 @@ export default {
 
       const rawStatus = String(this.status || '').trim();
       const normalizedStatus = rawStatus.toLowerCase();
-      const overrideTypes = {
-        active: 'success',
-        inactive: 'info',
-        '激活': 'success',
-        '未激活': 'info',
-        '停用': 'info',
-        '已停用': 'info',
-        paused: 'paused',
-        '已暂停': 'paused',
-        skipped: 'paused',
-        '已跳过': 'paused',
+      const overrideMeta = {
+        active: { label: '激活', type: 'success' },
+        inactive: { label: '未激活', type: 'info' },
+        '激活': { label: '激活', type: 'success' },
+        '未激活': { label: '未激活', type: 'info' },
+        '停用': { label: '停用', type: 'info' },
+        '已停用': { label: '已停用', type: 'info' },
+        paused: { label: '已暂停', type: 'paused' },
+        '已暂停': { label: '已暂停', type: 'paused' },
+        skipped: { label: '已跳过', type: 'paused' },
+        '已跳过': { label: '已跳过', type: 'paused' },
       };
-      const resolvedType = overrideTypes[normalizedStatus] || info.type;
+      const resolvedMeta = overrideMeta[normalizedStatus] || null;
+      const resolvedType = resolvedMeta?.type || info.type;
 
       // 将 Element UI 的 type 映射到 daisyUI 的 badge 类
       const typeMapping = {
@@ -55,6 +56,7 @@ export default {
 
       return {
         ...info,
+        label: resolvedMeta?.label || info.label,
         badgeClass: typeMapping[resolvedType] || 'badge-ghost',
       };
     },

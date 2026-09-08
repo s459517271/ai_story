@@ -132,6 +132,7 @@
                 type="url"
                 class="field-input"
                 :placeholder="getApiUrlPlaceholder()"
+                @blur="handleVendorConnectionBlur"
               >
               <span class="field-hint">默认已带出预设地址，可按当前模型能力改成你的自定义网关地址</span>
             </label>
@@ -143,11 +144,12 @@
                 type="password"
                 class="field-input"
                 placeholder="请输入该厂商 API Key"
+                @blur="handleVendorConnectionBlur"
               >
             </label>
           </div>
 
-          <div class="discover-actions">
+          <div class="discover-actions mt-2">
             <button
               class="primary-action"
               :disabled="discovering || !canDiscover"
@@ -797,7 +799,6 @@
 import { mapActions } from 'vuex'
 import { modelProviderApi } from '@/api/models'
 
-const VENDOR_API_KEY_STORAGE_KEY = 'model_vendor_api_keys'
 
 export default {
   name: 'ModelCreate',
@@ -851,7 +852,8 @@ export default {
       },
       availableExecutors: [],
       loadingExecutors: false,
-      submittingManual: false
+      submittingManual: false,
+      loadingVendorConfig: false
     }
   },
   computed: {
@@ -966,7 +968,8 @@ export default {
       const capabilities = vendor?.capabilities || []
       if (!capabilities.length) {
         this.vendorForm.capability = 'llm'
-        this.vendorForm.api_key = this.getStoredVendorApiKey(value)
+        this.vendorForm.api_key = ''
+        this.vendorForm.api_url = ''
         return
       }
       if (!capabilities.some((item) => item.key === this.vendorForm.capability)) {
@@ -975,14 +978,15 @@ export default {
       this.discoveredModels = []
       this.selectedModelNames = []
       this.submitBatchResult = null
-      this.vendorForm.api_key = this.getStoredVendorApiKey(value)
       this.syncVendorApiUrl()
+      this.loadVendorConnectionConfig()
     },
     'vendorForm.capability'() {
       this.discoveredModels = []
       this.selectedModelNames = []
       this.submitBatchResult = null
       this.syncVendorApiUrl()
+      this.loadVendorConnectionConfig()
     }
   },
   async created() {
@@ -1032,42 +1036,65 @@ export default {
       return this.selectedCapability?.api_url || '请输入完整的 API 地址'
     },
 
-    getVendorApiKeyStore() {
-      try {
-        const rawValue = localStorage.getItem(VENDOR_API_KEY_STORAGE_KEY)
-        return rawValue ? JSON.parse(rawValue) : {}
-      } catch (error) {
-        console.warn('读取厂商 API Key 缓存失败:', error)
-        return {}
-      }
-    },
-
-    getStoredVendorApiKey(vendor) {
-      if (!vendor) {
-        return ''
-      }
-      const store = this.getVendorApiKeyStore()
-      return store[vendor] || ''
-    },
-
-    persistVendorApiKey(vendor, apiKey) {
-      if (!vendor) {
+    async loadVendorConnectionConfig() {
+      if (!this.vendorForm.vendor || !this.vendorForm.capability) {
+        this.vendorForm.api_key = ''
+        this.syncVendorApiUrl()
         return
       }
-      const store = this.getVendorApiKeyStore()
-      const nextApiKey = (apiKey || '').trim()
-      if (nextApiKey) {
-        store[vendor] = nextApiKey
-      } else {
-        delete store[vendor]
+
+      this.loadingVendorConfig = true
+      try {
+        const response = await modelProviderApi.getVendorConnectionConfig({
+          vendor: this.vendorForm.vendor,
+          capability: this.vendorForm.capability
+        })
+        const savedApiKey = (response.api_key || '').trim()
+        const savedApiUrl = (response.api_url || '').trim()
+        this.vendorForm.api_key = savedApiKey
+        if (savedApiUrl) {
+          this.vendorForm.api_url = savedApiUrl
+        } else {
+          this.syncVendorApiUrl()
+        }
+      } catch (error) {
+        console.error('加载厂商连接配置失败:', error)
+        this.syncVendorApiUrl()
+      } finally {
+        this.loadingVendorConfig = false
       }
-      localStorage.setItem(VENDOR_API_KEY_STORAGE_KEY, JSON.stringify(store))
+    },
+
+    async persistVendorConnectionConfig() {
+      if (!this.vendorForm.vendor || !this.vendorForm.capability) {
+        return
+      }
+      await modelProviderApi.updateVendorConnectionConfig({
+        vendor: this.vendorForm.vendor,
+        capability: this.vendorForm.capability,
+        api_key: this.vendorForm.api_key,
+        api_url: this.vendorForm.api_url
+      })
+    },
+
+    async handleVendorConnectionBlur() {
+      if (this.loadingVendorConfig || !this.vendorForm.vendor || !this.vendorForm.capability) {
+        return
+      }
+      try {
+        await this.persistVendorConnectionConfig()
+      } catch (error) {
+        console.error('保存厂商连接配置失败:', error)
+      }
     },
 
     async loadVendors() {
       try {
         const response = await modelProviderApi.getBuiltinVendors()
         this.vendors = response.results || []
+        if (this.vendorForm.vendor && this.vendorForm.capability) {
+          await this.loadVendorConnectionConfig()
+        }
       } catch (error) {
         console.error('加载内置厂商失败:', error)
         await this.$alert('加载内置厂商失败', '加载失败', { tone: 'error' })
@@ -1089,7 +1116,7 @@ export default {
           api_key: this.vendorForm.api_key,
           api_url: this.vendorForm.api_url
         })
-        this.persistVendorApiKey(this.vendorForm.vendor, this.vendorForm.api_key)
+        await this.persistVendorConnectionConfig()
         this.discoveredModels = response.models || []
         const preferredMode = this.selectedCapability?.provider_type || this.vendorForm.capability
         this.modelFilterMode = this.discoveredModels.some((item) => item.classified_capability === preferredMode)
@@ -1150,7 +1177,7 @@ export default {
           rate_limit_rpd: this.vendorForm.rate_limit_rpd,
           priority: this.vendorForm.priority
         })
-        this.persistVendorApiKey(this.vendorForm.vendor, this.vendorForm.api_key)
+        await this.persistVendorConnectionConfig()
         this.submitBatchResult = response
         await this.$alert(
           `创建完成：新增 ${response.created_count} 个，跳过 ${response.skipped_count} 个`,

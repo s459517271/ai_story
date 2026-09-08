@@ -64,9 +64,9 @@ class PromptTemplate(models.Model):
         ('storyboard', '分镜生成'),
         ('image_generation', '文生图'),
         ('multi_grid_image', '多宫格图片'),
+        ('image_edit', '图片编辑'),
         ('camera_movement', '运镜生成'),
         ('video_generation', '图生视频'),
-        ('image_edit', '图片编辑'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -96,6 +96,10 @@ class PromptTemplate(models.Model):
     # 变量定义 (JSON格式)
     # 示例: {"topic": "string", "style": "string", "length": "int"}
     variables = models.JSONField('变量定义', default=dict, blank=True)
+
+    # 阶段执行参数 (JSON格式)
+    # 示例: {"duration": 5, "fps": 24}
+    client_params = models.JSONField('执行参数', default=dict, blank=True)
 
     # 版本控制
     version = models.IntegerField('版本', default=1)
@@ -275,6 +279,7 @@ class PromptDebugSession(models.Model):
     stage_type = models.CharField('阶段类型', max_length=20, choices=PromptTemplate.STAGE_TYPES)
     draft_template_content = models.TextField('草稿模板内容', blank=True, default='')
     draft_variables = models.JSONField('草稿变量定义', default=dict, blank=True)
+    draft_client_params = models.JSONField('草稿执行参数', default=dict, blank=True)
     model_provider = models.ForeignKey(
         'models.ModelProvider',
         on_delete=models.SET_NULL,

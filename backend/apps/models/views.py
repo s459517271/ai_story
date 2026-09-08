@@ -24,6 +24,8 @@ from .serializers import (
     ModelProviderSimpleSerializer,
     VendorModelDiscoverySerializer,
     VendorModelBatchCreateSerializer,
+    VendorConnectionConfigSerializer,
+    VendorConnectionConfigQuerySerializer,
 )
 from .services import ModelProviderService, ModelUsageLogService
 
@@ -40,7 +42,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     filterset_fields = ['provider_type', 'is_active']
     search_fields = ['name', 'model_name', 'api_url']
     ordering_fields = ['created_at', 'updated_at', 'priority', 'name']
-    ordering = ['-priority', '-created_at']
+    ordering = ['-created_at']
 
     def get_queryset(self):
         """获取所有模型提供商"""
@@ -127,7 +129,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def toggle_status(self, request, pk=None):
         """
         切换模型提供商激活状态
-        POST /api/v1/models/providers/{id}/toggle-status/
+        POST /api/v1/models/providers/{id}/toggle_status/
         """
         instance = self.get_object()
         provider = ModelProviderService.toggle_provider_status(str(instance.id))
@@ -153,7 +155,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def test_connection(self, request, pk=None):
         """
         测试模型提供商连接
-        POST /api/v1/models/providers/{id}/test-connection/
+        POST /api/v1/models/providers/{id}/test_connection/
         Body: {"test_prompt": "Hello, this is a test."}
         """
         instance = self.get_object()
@@ -167,11 +169,17 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
             'test_prompt',
             'Hello, this is a test.'
         )
+        test_image_url = serializer.validated_data.get('test_image_url', '')
+        test_image_base64 = serializer.validated_data.get('test_image_base64', '')
+        test_image_mime_type = serializer.validated_data.get('test_image_mime_type', 'image/jpeg')
 
         # 异步测试转同步执行
         result = async_to_sync(ModelProviderService.test_provider_connection)(
             str(instance.id),
-            test_prompt
+            test_prompt,
+            test_image_url=test_image_url,
+            test_image_base64=test_image_base64,
+            test_image_mime_type=test_image_mime_type,
         )
 
         if result['success']:
@@ -194,7 +202,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def usage_logs(self, request, pk=None):
         """
         获取模型提供商的使用日志
-        GET /api/v1/models/providers/{id}/usage-logs/
+        GET /api/v1/models/providers/{id}/usage_logs/
         """
         instance = self.get_object()
         limit = int(request.query_params.get('limit', 100))
@@ -214,7 +222,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def active_providers(self, request):
         """
         获取所有激活的模型提供商
-        GET /api/v1/models/providers/active-providers/
+        GET /api/v1/models/providers/active_providers/
         Query: ?provider_type=llm
         """
         provider_type = request.query_params.get('provider_type')
@@ -230,7 +238,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def by_type(self, request):
         """
         按类型分组获取模型提供商
-        GET /api/v1/models/providers/by-type/
+        GET /api/v1/models/providers/by_type/
         """
         llm_providers = ModelProvider.objects.filter(
             provider_type='llm',
@@ -259,11 +267,12 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
             'image_edit': ModelProviderListSerializer(image_edit_providers, many=True).data,
         })
 
+
     @action(detail=False, methods=['get'])
     def simple_list(self, request):
         """
         获取简化的模型列表(仅id和name) - 用于下拉选择
-        GET /api/v1/models/providers/simple-list/
+        GET /api/v1/models/providers/simple_list/
         Query: ?provider_type=llm
         """
         provider_type = request.query_params.get('provider_type')
@@ -285,7 +294,7 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
     def executor_choices(self, request):
         """
         获取执行器选项列表
-        GET /api/v1/models/providers/executor-choices/
+        GET /api/v1/models/providers/executor_choices/
         Query: ?provider_type=llm
 
         返回格式:
@@ -327,6 +336,17 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
         return Response(all_executors)
 
     @action(detail=False, methods=['get'])
+    def opencode_config_status(self, request):
+        """获取 opencode 配置同步状态。"""
+        return Response(ModelProviderService.get_opencode_config_status())
+
+    @action(detail=False, methods=['post'])
+    def sync_opencode_config(self, request):
+        """手动同步模型管理到 opencode 配置文件。"""
+        result = ModelProviderService.sync_opencode_config()
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
     def builtin_vendors(self, request):
         """获取内置厂商目录。"""
         vendors = ModelProviderService.list_builtin_vendors()
@@ -334,6 +354,37 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
             'count': len(vendors),
             'results': vendors,
         })
+
+    @action(detail=False, methods=['get', 'put'])
+    def vendor_connection_config(self, request):
+        """获取或保存当前用户的厂商导入连接配置。"""
+        if request.method.lower() == 'get':
+            serializer = VendorConnectionConfigQuerySerializer(data=request.query_params)
+            serializer.is_valid(raise_exception=True)
+            config = ModelProviderService.get_vendor_connection_config(
+                user=request.user,
+                vendor=serializer.validated_data['vendor'],
+                capability=serializer.validated_data['capability'],
+            )
+            if not config:
+                return Response({
+                    'vendor': serializer.validated_data['vendor'],
+                    'capability': serializer.validated_data['capability'],
+                    'api_key': '',
+                    'api_url': '',
+                })
+            return Response(VendorConnectionConfigSerializer(config).data)
+
+        serializer = VendorConnectionConfigSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        config = ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data.get('api_key', ''),
+            api_url=serializer.validated_data.get('api_url', ''),
+        )
+        return Response(VendorConnectionConfigSerializer(config).data)
 
     @action(detail=False, methods=['post'])
     def discover_vendor_models(self, request):
@@ -353,6 +404,14 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
         except Exception as error:
             return Response({'error': f'获取厂商模型失败: {error}'}, status=status.HTTP_400_BAD_REQUEST)
 
+        ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data['api_key'],
+            api_url=result.get('api_url', serializer.validated_data.get('api_url', '')),
+        )
+
         return Response(result)
 
     @action(detail=False, methods=['post'])
@@ -362,6 +421,14 @@ class ModelProviderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         result = ModelProviderService.batch_create_vendor_models(serializer.validated_data)
+
+        ModelProviderService.save_vendor_connection_config(
+            user=request.user,
+            vendor=serializer.validated_data['vendor'],
+            capability=serializer.validated_data['capability'],
+            api_key=serializer.validated_data['api_key'],
+            api_url=result.get('api_url', serializer.validated_data.get('api_url', '')),
+        )
 
         return Response({
             'vendor': result['vendor'],
@@ -396,7 +463,7 @@ class ModelUsageLogViewSet(viewsets.ReadOnlyModelViewSet):
     def by_project(self, request):
         """
         按项目获取使用日志
-        GET /api/v1/models/usage-logs/by-project/
+        GET /api/v1/models/usage-logs/by_project/
         Query: ?project_id=xxx&stage_type=rewrite
         """
         project_id = request.query_params.get('project_id')
@@ -419,7 +486,7 @@ class ModelUsageLogViewSet(viewsets.ReadOnlyModelViewSet):
     def failed_logs(self, request):
         """
         获取失败的使用日志
-        GET /api/v1/models/usage-logs/failed-logs/
+        GET /api/v1/models/usage-logs/failed_logs/
         """
         limit = int(request.query_params.get('limit', 100))
         logs = ModelUsageLogService.get_failed_logs(limit=limit)

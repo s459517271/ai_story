@@ -155,6 +155,14 @@ export const promptTemplateAPI = {
     });
   },
 
+  getClientParamSchema(stageType) {
+    return apiClient({
+      url: '/prompts/templates/client_param_schema/',
+      method: 'get',
+      params: stageType ? { stage_type: stageType } : {},
+    });
+  },
+
   /**
    * 创建提示词模板
    * @param {Object} data - {template_set, stage_type, template_content, variables, is_active}
@@ -534,6 +542,22 @@ export const globalVariableAPI = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+    });
+  },
+
+  generateImage(data) {
+    return apiClient({
+      url: '/prompts/variables/generate_image/',
+      method: 'post',
+      data,
+    });
+  },
+
+  createImageAsset(data) {
+    return apiClient({
+      url: '/prompts/variables/create_image_asset/',
+      method: 'post',
+      data,
     });
   },
 };

@@ -55,21 +55,6 @@
       </div>
       <div class="select-group">
         <select
-          v-model="filterScope"
-          class="select-input"
-          @change="handleFilter"
-        >
-          <option value="">
-            全部作用域
-          </option>
-          <option value="user">
-            用户级
-          </option>
-          <option value="system">
-            系统级
-          </option>
-        </select>
-        <select
           v-model="filterType"
           class="select-input"
           @change="handleFilter"
@@ -155,86 +140,96 @@
           v-for="asset in assets"
           :key="asset.id"
           class="data-card"
+          :class="{ 'image-card': asset.variable_type === 'image' }"
           role="button"
           tabindex="0"
           @click="handleEdit(asset)"
           @keydown.enter="handleEdit(asset)"
           @keydown.space.prevent="handleEdit(asset)"
         >
-          <div class="card-header">
-            <code class="asset-key">{{ asset.key }}</code>
-            <StatusBadge :status="asset.is_active ? 'active' : 'inactive'" />
-          </div>
+          <button
+            class="ghost-action floating-delete"
+            :disabled="asset.scope === 'system' && !isAdmin"
+            title="删除"
+            @click.stop="handleDelete(asset)"
+          >
+            删除
+          </button>
 
-          <div class="card-value">
+          <template v-if="asset.variable_type === 'image'">
             <div
-              v-if="asset.variable_type === 'image'"
-              class="thumb-cell"
+              class="image-stage"
+              @click.stop="asset.image_url && previewImage(asset.image_url)"
             >
               <img
                 v-if="asset.image_url"
                 :src="asset.image_url"
                 :alt="asset.key"
-                class="thumb"
-                @click.stop="previewImage(asset.image_url)"
+                class="card-image"
               >
-              <span
-                v-else
-                class="muted"
-              >未上传</span>
               <div
-                v-if="asset.value"
-                class="value-text image-text"
-                :title="String(asset.value)"
+                v-else
+                class="image-placeholder"
               >
-                {{ formatValue(asset) }}
+                暂无图片
+              </div>
+              <div class="image-overlay">
+                <span class="image-label">资产键</span>
+                <span class="image-key">{{ asset.key }}</span>
               </div>
             </div>
+
             <div
-              v-else
+              v-if="asset.group"
+              class="card-meta-row compact-tags"
+            >
+              <span class="pill">{{ asset.group }}</span>
+            </div>
+
+            <p
+              v-if="asset.description"
+              class="card-desc"
+            >
+              {{ asset.description }}
+            </p>
+          </template>
+
+          <template v-else>
+            <div class="card-header">
+              <div class="asset-name-block">
+                <span class="asset-name-label">资产键</span>
+                <code class="asset-key">{{ asset.key }}</code>
+              </div>
+              <StatusBadge :status="asset.is_active ? 'active' : 'inactive'" />
+            </div>
+
+            <div
               class="value-text"
               :title="String(asset.value)"
             >
               {{ formatValue(asset) }}
             </div>
-          </div>
 
-          <div class="card-tags">
-            <span
-              class="badge badge-sm"
-              :class="getTypeBadgeClass(asset.variable_type)"
-            >
-              {{ asset.variable_type_display }}
-            </span>
-            <span
-              class="badge badge-sm"
-              :class="getScopeBadgeClass(asset.scope)"
-            >
-              {{ asset.scope_display }}
-            </span>
-            <span
-              v-if="asset.group"
-              class="pill"
-            >{{ asset.group }}</span>
-          </div>
-
-          <p class="card-desc">
-            {{ asset.description || '暂无描述' }}
-          </p>
-
-          <div class="card-meta">
-            <span class="muted">更新于 {{ formatDate(asset.updated_at) }}</span>
-            <div class="row-actions">
-              <button
-                class="ghost-action"
-                :disabled="asset.scope === 'system' && !isAdmin"
-                title="删除"
-                @click.stop="handleDelete(asset)"
+            <div class="card-meta-row compact-tags">
+              <span
+                class="badge badge-sm"
+                :class="getTypeBadgeClass(asset.variable_type)"
               >
-                删除
-              </button>
+                {{ asset.variable_type_display }}
+              </span>
+              <span
+                v-if="asset.group"
+                class="pill"
+              >{{ asset.group }}</span>
             </div>
-          </div>
+
+            <p
+              v-if="asset.description"
+              class="card-desc"
+            >
+              {{ asset.description }}
+            </p>
+          </template>
         </article>
       </div>
     </LoadingContainer>
@@ -274,13 +269,11 @@
 <script>
 import { globalVariableAPI } from '@/api/prompts';
 import LoadingContainer from '@/components/common/LoadingContainer.vue';
-import StatusBadge from '@/components/common/StatusBadge.vue';
 
 export default {
   name: 'AssetList',
   components: {
     LoadingContainer,
-    StatusBadge,
   },
   data() {
     return {
@@ -288,7 +281,6 @@ export default {
       assets: [],
       groups: [],
       searchKeyword: '',
-      filterScope: '',
       filterType: '',
       filterGroup: '',
       previewImageUrl: null,
@@ -309,7 +301,6 @@ export default {
       try {
         const params = {
           search: this.searchKeyword || undefined,
-          scope: this.filterScope || undefined,
           variable_type: this.filterType || undefined,
           group: this.filterGroup || undefined,
         };
@@ -391,18 +382,6 @@ export default {
       return value || '-';
     },
 
-    formatDate(dateString) {
-      if (!dateString) return '-';
-      const date = new Date(dateString);
-      return date.toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    },
-
     getTypeBadgeClass(type) {
       const classes = {
         string: 'badge-info',
@@ -412,10 +391,6 @@ export default {
         image: 'badge-accent',
       };
       return classes[type] || 'badge-ghost';
-    },
-
-    getScopeBadgeClass(scope) {
-      return scope === 'system' ? 'badge-error' : 'badge-primary';
     },
   },
 };
@@ -649,6 +624,11 @@ export default {
   cursor: pointer;
 }
 
+.image-card {
+  padding: 0.85rem;
+  gap: 0.8rem;
+}
+
 .layout-shell.theme-dark .data-card {
   background: rgba(15, 23, 42, 0.92);
   border-color: rgba(148, 163, 184, 0.2);
@@ -687,15 +667,29 @@ export default {
   transform: scaleX(1);
 }
 
+.floating-delete {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+
+.data-card:hover .floating-delete,
+.data-card:focus-within .floating-delete,
+.floating-delete:focus {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-}
-
-.card-value {
-  min-height: 48px;
 }
 
 .value-text {
@@ -715,6 +709,13 @@ export default {
 
 .card-tags {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.card-meta-row {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
@@ -828,13 +829,6 @@ export default {
   color: #94a3b8;
 }
 
-.card-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
 .asset-key {
   font-family: 'Courier New', monospace;
   background: rgba(148, 163, 184, 0.12);
@@ -845,39 +839,79 @@ export default {
   overflow-wrap: anywhere;
 }
 
+.asset-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.asset-name-label,
+.image-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.asset-name-label {
+  color: #64748b;
+}
+
 .layout-shell.theme-dark .asset-key {
   background: rgba(148, 163, 184, 0.2);
   color: #e2e8f0;
 }
 
-.thumb-cell {
+.image-stage {
+  position: relative;
+  min-height: 260px;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.18), transparent 35%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(226, 232, 240, 0.88));
+}
+
+.card-image {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.image-placeholder {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  height: 260px;
+  color: #64748b;
+  font-size: 0.95rem;
 }
 
-.thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  object-fit: cover;
-  cursor: pointer;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+.image-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.1rem 1rem 0.9rem;
+  background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.78));
 }
 
-.layout-shell.theme-dark .thumb {
-  border-color: rgba(148, 163, 184, 0.3);
+.image-key {
+  display: inline-block;
+  max-width: 100%;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
-.row-actions {
-  display: flex;
-  gap: 0.5rem;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.data-card:hover .row-actions {
-  opacity: 1;
+.image-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(226, 232, 240, 0.8);
 }
 
 .ghost-action {
@@ -914,6 +948,20 @@ export default {
 .muted {
   color: #94a3b8;
   font-size: 0.85rem;
+}
+
+.layout-shell.theme-dark .image-stage {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 35%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9));
+}
+
+.layout-shell.theme-dark .image-placeholder {
+  color: #94a3b8;
+}
+
+.layout-shell.theme-dark .asset-name-label {
+  color: #94a3b8;
 }
 
 .empty-state {

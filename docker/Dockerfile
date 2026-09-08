@@ -32,7 +32,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY backend /app/backend
 COPY docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint
 
-RUN mkdir -p staticfiles media logs
+RUN sed -i 's/\r$//' /usr/local/bin/backend-entrypoint \
+    && chmod +x /usr/local/bin/backend-entrypoint \
+    && mkdir -p staticfiles media logs
 
 EXPOSE 8010
 

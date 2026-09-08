@@ -26,6 +26,7 @@ class TaskStatus(Enum):
     QUEUED = "Queued"
     RUNNING = "Running"
     COMPLETED = "Completed"
+    SUCCESS = "SUCCESS"
     FAILED = "Failed"
     UPLOADING = "Uploading"
     UNKNOWN = "Unknown"
@@ -74,11 +75,7 @@ class VideoGeneratorClient:
 
     def _build_create_video_url(self) -> str:
         """构建视频生成请求地址。"""
-        if self._is_chat_completions_endpoint(self.base_url):
-            return self.base_url
-        if self._is_video_generations_endpoint(self.base_url):
-            return self.base_url
-        return f"{self.base_url.rstrip('/')}/v1/videos/generations"
+        return self.base_url
 
     def _build_task_status_url(self, task_id: str) -> str:
         """构建任务状态查询地址。"""
@@ -141,6 +138,34 @@ class VideoGeneratorClient:
             return self._read_storage_image_as_base64(image_url)
 
         return self._read_image_url_as_base64(image_url, timeout)
+
+    def _resolve_image_base64s(
+        self,
+        image_uris: Optional[List[Any]],
+        image_base64s: Optional[List[str]],
+        timeout: int,
+    ) -> List[str]:
+        """统一解析多张输入图片为 base64 列表。"""
+        resolved_images = []
+
+        normalized_base64s = [item for item in (image_base64s or []) if item]
+        for item in normalized_base64s:
+            resolved_images.append(item)
+
+        for item in image_uris or []:
+            resolved = self._resolve_image_base64(item, None, timeout)
+            if resolved:
+                resolved_images.append(resolved)
+
+        deduplicated = []
+        seen = set()
+        for item in resolved_images:
+            if item in seen:
+                continue
+            seen.add(item)
+            deduplicated.append(item)
+
+        return deduplicated
 
     def _get_video_extension(self, content_type: str = '', source_url: str = '') -> str:
         """根据响应头或URL推断视频扩展名。"""
@@ -240,7 +265,9 @@ class VideoGeneratorClient:
         aspect_ratio: str = '16:9',
         generate_audio: bool = True,
         image_uri: Optional[str] = None,
+        image_uris: Optional[List[Any]] = None,
         image_base64: Optional[str] = None,
+        image_base64s: Optional[List[str]] = None,
         image_mime_type: str = 'image/jpeg',
         resolution: Optional[str] = None,
         seed: Optional[int] = None,
@@ -252,7 +279,19 @@ class VideoGeneratorClient:
         """创建视频生成任务。"""
         url = self._build_create_video_url()
         timeout = kwargs.get('timeout', self.timeout)
-        resolved_image_base64 = self._resolve_image_base64(image_uri, image_base64, timeout)
+        normalized_image_uris = list(image_uris or [])
+        if image_uri and image_uri not in normalized_image_uris:
+            normalized_image_uris.insert(0, image_uri)
+
+        normalized_image_base64s = list(image_base64s or [])
+        if image_base64 and image_base64 not in normalized_image_base64s:
+            normalized_image_base64s.insert(0, image_base64)
+
+        resolved_image_base64s = self._resolve_image_base64s(
+            normalized_image_uris,
+            normalized_image_base64s,
+            timeout,
+        )
         final_prompt = self._build_prompt_text(
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -267,16 +306,12 @@ class VideoGeneratorClient:
                 }
             ]
 
-            image_url = ''
-            if resolved_image_base64:
-                image_url = f'data:{image_mime_type};base64,{resolved_image_base64}'
-
-            if image_url:
+            for resolved_image_base64 in resolved_image_base64s:
                 message_content.append(
                     {
                         'type': 'image_url',
                         'image_url': {
-                            'url': image_url,
+                            'url': f'data:{image_mime_type};base64,{resolved_image_base64}',
                         },
                     }
                 )
@@ -316,8 +351,15 @@ class VideoGeneratorClient:
             'prompt': final_prompt,
             'filePaths': [],
         }
-        if resolved_image_base64:
-            payload['imageBase64'] = resolved_image_base64
+        if resolved_image_base64s:
+            data_urls = [
+                f'data:{image_mime_type};base64,{resolved_image_base64}'
+                for resolved_image_base64 in resolved_image_base64s
+            ]
+            payload['image'] = data_urls[0]
+            payload['images'] = data_urls
+            payload['imageBase64'] = resolved_image_base64s[0]
+            payload['imageBase64s'] = resolved_image_base64s
         if camera_movement_description:
             payload['cameraMovementDescription'] = camera_movement_description
         if resolution:
@@ -379,10 +421,13 @@ class VideoGeneratorClient:
 
             task_info = self.get_task_status(task_id)
             status = task_info.get('status')
-
+            if status is None and "data" in task_info:
+                task_info = task_info["data"]
+                status = task_info.get("status")
             if callback:
                 callback(task_info)
-
+            if status == TaskStatus.SUCCESS.value:
+                return task_info
             if status == TaskStatus.COMPLETED.value:
                 return task_info
             if status == TaskStatus.FAILED.value:
@@ -437,6 +482,9 @@ class VideoGeneratorClient:
         )
 
         videos = result.get('data', {}).get('videos', [])
+        if not videos:
+            video = result.get('data', {}).get("content", {}).get("video_url")
+            videos = [video]
         video_data = []
         for video in videos:
             url = video.get('url') if isinstance(video, dict) else video
