@@ -2,7 +2,7 @@
 
 [中文版](README.md)
 
-![logo](logo.png)
+![logo](docs/images/logo.png)
 
 <div class="column" align="middle">
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11-blue.svg" alt=""></a>
@@ -24,7 +24,7 @@ AI Story is an AI-powered platform for automatically creating story videos. Simp
 <table>
   <tr>
     <td width="190" align="center">
-      <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener"><img src="/sota.jpg" width="163" alt="秘塔科技 MetaSota"></a>
+      <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener"><img src="docs/images/sota.jpg" width="163" alt="秘塔科技 MetaSota"></a>
     </td>
     <td>
       <strong>MiniMax H3 Video Generation API | MetaSota</strong> MetaSota provides cost-effective MiniMax H3 video generation: <strong>768P at just CNY 0.09/second and 2K at CNY 0.15/second</strong>. It supports native 2K output, synchronized audio and video, and APIs compatible with the <strong>OpenAI protocol</strong>, as well as <strong>ComfyUI</strong> integration, with no GPU deployment required. 🎁 Register through the <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener noreferrer">AI_STORY exclusive link</a> to receive bonus credits and special discounts.
@@ -32,7 +32,7 @@ AI Story is an AI-powered platform for automatically creating story videos. Simp
   </tr>
   <tr>
     <td width="190" align="center">
-      <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener"><img src="/5g.png" width="163" alt="AI Super Factory"></a>
+      <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener"><img src="docs/images/5g.png" width="163" alt="AI Super Factory"></a>
     </td>
     <td>
       <strong>AI Super Factory: Multiple Models, Unlimited Possibilities</strong> A one-stop AI model API aggregation platform compatible with the OpenAI API standard, supporting more than 100 leading models, including <strong>GPT-5, Claude 4.7, DeepSeek, and Gemini</strong>.
@@ -114,17 +114,17 @@ docker-compose exec backend python backend/manage.py createsuperuser
 
 ## Interface Preview
 
-![Video generation](image-11.png)
-![Video generation](image-12.png)
-![Video generation](image-13.png)
-![Video generation](image-3.png)
-![Video generation](image-4.png)
-![Video generation](image-5.png)
+![Video generation](docs/images/image-11.png)
+![Video generation](docs/images/image-12.png)
+![Video generation](docs/images/image-13.png)
+![Video generation](docs/images/image-3.png)
+![Video generation](docs/images/image-4.png)
+![Video generation](docs/images/image-5.png)
 
 **Director Mode** - In development, with more precise storyboard and video controls
-![Director mode interface](image14.png)
-![Director mode interface](image15.png)
-![Director mode interface](image16.png)
+![Director mode interface](docs/images/image14.png)
+![Director mode interface](docs/images/image15.png)
+![Director mode interface](docs/images/image16.png)
 
 **Finished video samples** - Search for `小小方圆669` on WeChat Channels.
 
@@ -288,7 +288,7 @@ For commercial licensing, contact: 408737515@qq.com
 ## Contact
 
 <div>
-<img  src="/img0402.jpg" width="250">  &nbsp;
+<img  src="docs/images/img0402.jpg" width="250">  &nbsp;
 </div>
 
 - WeChat Channels: 小小方圆669

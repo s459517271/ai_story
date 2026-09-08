@@ -2,7 +2,7 @@
 
 [English Version](README_EN.md)
 
-![logo](logo.png)
+![logo](docs/images/logo.png)
 
 <div class="column" align="middle">
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11-blue.svg" alt=""></a>
@@ -25,7 +25,7 @@ AI Story 是一个基于人工智能的故事视频自动化生成平台。只�
 <table>
   <tr>
     <td width="190" align="center">
-      <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener"><img src="/sota.jpg" width="163" alt="秘塔科技 MetaSota"></a>
+      <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener"><img src="docs/images/sota.jpg" width="163" alt="秘塔科技 MetaSota"></a>
     </td>
     <td>
       <strong>MiniMax H3 视频生成 API｜秘塔科技</strong> 秘塔科技提供高性价比的 MiniMax H3 视频生成服务：<strong>768P 仅 0.09 元/秒，2K 仅 0.15 元/秒</strong>。支持原生 2K、音画同步，API 兼容 <strong>OpenAI 协议</strong>，同时支持 <strong>ComfyUI</strong>，无需自行部署 GPU。 🎁 通过 <a href="https://metaso.cn/minimax-h3/?s=ai_story" target="_blank" rel="noopener noreferrer">AI
@@ -34,7 +34,7 @@ AI Story 是一个基于人工智能的故事视频自动化生成平台。只�
   </tr>
   <tr>
     <td width="190" align="center">
-      <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener"><img src="/5g.png" width="163" alt="AI 超级工厂"></a>
+      <a href="https://5gtoken.com/login?dist=0494ce61a85d0e25" target="_blank" rel="noopener"><img src="docs/images/5g.png" width="163" alt="AI 超级工厂"></a>
     </td>
     <td>
       <strong>AI 超级工厂聚合多款模型</strong> 驱动无限可能,一站式 AI 模型 API 聚合平台，兼容 OpenAI 接口标准，<strong>兼容 OpenAI 接口标准，
@@ -115,18 +115,18 @@ docker-compose exec backend python backend/manage.py createsuperuser
 
 ## 界面预览
 
-![视频生成](image-11.png)
-![视频生成](image-12.png)
-![视频生成](image-13.png)
-![视频生成](image-3.png)
-![视频生成](image-4.png)
-![视频生成](image-5.png)
+![视频生成](docs/images/image-11.png)
+![视频生成](docs/images/image-12.png)
+![视频生成](docs/images/image-13.png)
+![视频生成](docs/images/image-3.png)
+![视频生成](docs/images/image-4.png)
+![视频生成](docs/images/image-5.png)
 
 
 **导演模式** - 正在开发中，支持更精细的分镜和视频控制
-![导演模式界面](image14.png)
-![导演模式界面](image15.png)
-![导演模式界面](image16.png)
+![导演模式界面](docs/images/image14.png)
+![导演模式界面](docs/images/image15.png)
+![导演模式界面](docs/images/image16.png)
 
 **成品视频效果** - 视频号搜索：小小方圆669
 
@@ -278,7 +278,7 @@ AI分析每个场景，自动生成合适的镜头运动方案。
 
 ## 联系方式
 <div>
-<img  src="/img0402.jpg" width="250">  &nbsp;
+<img  src="docs/images/img0402.jpg" width="250">  &nbsp;
 </div>
 
 - 视频号：小小方圆669
